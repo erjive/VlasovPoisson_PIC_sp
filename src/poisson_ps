@@ -1,0 +1,567 @@
+subroutine poisson_ps
+
+! Include modules.
+
+  use parameters
+  use arrays
+  use functions
+  use chebyshev
+
+! Declare variables.
+
+  implicit none
+
+  real(8) zero,one,two,smallpi
+
+  real(8) rmin,rmax,factor
+  real(8), dimension(0:NC):: xc                                          !Chebyshev points cos(i*pi/N), i=0,1,...,N.
+  real(8), dimension(0:NC):: caux,an                                  
+  real(8), dimension (0:NC) :: u_aux,raux,C0_aux,C1_aux,C2_aux,C3_aux    !Auxiliar arrays for pseudospectral solver.
+  real(8), dimension (0:NC) :: scalar_phi_aux,scalar_xi_aux              !Phi and Xi auxiliar arrays.
+  real(8), dimension (0:NC) :: avg_rho_aux                           !Density evaluated at the collocation points.
+
+! *******************
+! ***   NUMBERS   ***
+! *******************
+
+  zero= 0.d0
+  one = 1.d0
+  two = 2.d0
+
+  smallpi = acos(-1.d0)!4.D0*DATAN(1.D0)
+
+! *****************************
+! ***   INITIALIZE ARRAYS   ***
+! *****************************
+
+  xc   = zero
+  caux = zero
+  an   = zero
+  raux = zero
+  C0_aux = zero
+  C1_aux = zero
+  C2_aux = zero
+  C3_aux = zero
+  u      = zero
+
+! ***************************
+! *** PSEUDOSPECTRAL GRID ***
+! ***************************
+
+! Fill the Chebyshev (or collocation) points and its weights.
+
+  do i=0,NC
+     xc(i)=cos(dble(i*smallpi/NC))
+  end do
+
+  do i=0,NC
+     if ((i==0).or.(i==NC)) then
+        caux(i) = two
+     else
+        caux(i) = one
+     end if
+  end do
+
+! Fill radial coordinate
+!  rmin = 0.d0
+!  rmax = (dble(Nrtotal)-0.5d0)*dr(0)
+
+  do i=0,NC
+     raux(i)=r_x(xc(i),rmin,rmax)
+  end do
+
+! This factor is needed due to the chain rule.
+  factor = 2.d0/(rmax-rmin)
+
+
+! ********************************************************
+! *** EVALUATE THE DENSITY AT THE COLLOCATION POINTS   ***
+! ********************************************************
+
+  avg_rho_aux = 0.D0
+
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) private (j) collapse(2)
+
+  do i=0,NC
+    do j=1,Npart
+      if (abs(raux(i)-r_part(j))<=(bsplineorder+1)*drc) then
+
+        avg_rho_aux(i) = avg_rho_aux(i) + f(j)/drc*Wn(bsplineorder,(raux(i)-r_part(j))/drc)
+
+      end if
+    end do
+  end do
+  !$OMP END PARALLEL DO
+
+! Zero Angular Momentum
+  if (Lfix == 0.0d0) then
+
+    avg_rho_aux = m0*avg_rho_aux/r_aux**2
+! Include Angular Momentum
+  else
+
+    avg_rho_aux = smallpi*Lfix*m0*avg_rho_aux/r_aux**2
+
+  endif 
+
+! *************************************
+! *** SOLVE LINEAR POISSON EQUATION ***
+! *************************************
+
+!    Fill coefficients of linear equation, evaluated at the pseudospectral grid.
+!    The pseudospectral solver needs C0,...,C3 to be all regular.
+!    In order to use the pseudospectral solver, we need to evaluate the radial derivatives at the Chebyshev points
+!    df/dr = df/dx*dx/dr.
+!    At the moment, r and x are related by an algebraic map.
+!    r(x) = 1/2*(rmin+rmax)-1/2(rmin-rmax)*x
+
+     if (newr) then
+
+     else
+        C0_aux = raux*factor**2
+        C1_aux = 2.d0*factor
+        C2_aux = smallpi*raux*scalar_xi_aux**2
+        C3_aux = 0.d0
+        !C0_aux = factor**2
+        !C1_aux = 2.d0*factor/raux
+        !C2_aux = smallpi*scalar_xi_aux**2
+        !C3_aux = 0.d0
+
+     end if
+     call ps_solver(1.d0,u_aux,C0_aux,C1_aux,C2_aux,C3_aux,+1,"robin")
+
+end subroutine poisson_ps
+
+
+  subroutine ps_solver(u0,u,C0,C1,C2,C3,sym,bound)
+
+! ******************************************
+! *** SOLVE LINEAR POISSON-TYPE EQUATION ***
+! ******************************************
+
+! This subroutine solves a linear second order differential equation of the form:
+
+!        2
+! C0(x) d u  +  C1(x) d u  + C2(x) u  =  C3(x)
+!        x             x
+!
+! Using a pseudospectral method with Chebyshev polinomials.
+! Chebyshev polinomials are defined in the [-1,1] interval, for this reason
+! is mandatory that ODE coefficients have been previously evaluated in this interval.
+
+!
+! The outer boundary condition depends on the value of the
+! parameter "bound". The possible values are:
+!
+!       robin      (u0 is the value at infinity)
+!       dirichlet  (u0 is the boundary value)
+!       newmann    (u0 is the derivative at the boundary)
+!
+! At the moment, this subroutine only considers an algebraic map between 
+! the radial coordinate "r" and the Chebyshev points "x".
+! 
+! r(x) = 1/2*(rmin+rmax)-1/2(rmin-rmax)*x
+! 
+! Using the chain rule du/dr = du/dx*dx/dr = du/dx* 2/(rmax-rmin).
+! This factor needs to be considered in C1 before calling this subroutine. 
+! In a similar way, for C0 the factor is (2/rmax-rmin)^2.
+
+! For stability/convergence, it is better for C0,...,C3 to be all regular.
+! For example, for the Poisson equation in spherical coordinates, 
+! one needs to solve 
+!
+!  2
+! d psi + 2/r d  psi  = 4pi rho
+!  r           r
+!
+! For stability issues is better to solve
+
+!    2
+! r d psi + 2 d  psi  = 4 pi r rho
+!    r         r
+!
+! Include modules.
+
+  !use mpi
+  !use procinfo
+  use param
+  use arrays
+  use chebyshev
+  use lu
+
+! Extra variables.
+
+  implicit none
+
+  character bound*(*),bd*10
+
+  integer i,j,k,m,n,naux
+  integer sym
+  integer cn
+
+  real(8) zero,one,two,four,smallpi
+  real(8) u0
+  real(8) factor,rmin,rmax
+  !real(8) r_x
+  real(8),dimension (0:NC) :: u,C0,C1,C2,C3
+
+  real(8), dimension(0:NC):: xc,caux                 ! Chebyshev points cos(i*pi/N), i=0,1,...,N.
+!  real(8), dimension(0:NC-1):: xcaux                 
+
+  real(8), dimension(0:NC):: raux                 ! Radial coordinate. 
+  real(8), dimension(0:NC,0:NC) :: D1,D2          ! Derivative operators.
+  real(8), dimension(0:NC,0:NC) :: eye            ! Identity matrix.
+  real(8), dimension(0:NC,0:NC) :: D,D_inv        ! Final differential operator and inverse.
+  real(8), dimension(0:NC,0:NC) :: res            ! Residual.
+
+! LU decomposition
+
+  integer ri, rc
+  integer, dimension(0:NC) :: INDX
+
+!  LAPLACK AUXILIARIES
+  integer info                            !LAPACK error flag.
+  integer iter
+  integer, dimension(0:NC) :: ipiv        !LAPACK pivoting array.
+  real(8), dimension(0:NC) :: work        !Additional array for LAPACK.
+  real(8), dimension(0:(NC+1)*(NC+2)-1) :: swork
+
+  external DGETRF
+  external DGETRI
+  external DGESV
+
+  
+
+! ************************
+! ***   SANITY CHECK   ***
+! ************************
+
+  if (abs(sym)/=1) then
+     print *
+     print *, 'Symmetry parameter must be +-1'
+     print *, 'Aborting! (subroutine solve2ode)'
+     print *
+     call die
+  end if
+
+! *******************
+! ***   NUMBERS   ***
+! *******************
+
+  zero = 0.d0
+  one  = 1.d0
+  two  = 2.d0
+  four = 4.d0
+
+  smallpi = 4.D0*DATAN(1.D0)!dacos(-1.d0)
+
+
+! *****************************
+! ***   INITIALIZE ARRAYS   ***
+! *****************************
+
+  xc   = zero
+  caux = zero
+  D1   = zero
+  D2   = zero
+  raux = zero
+  eye  = zero
+
+  D = zero
+  D_inv = zero
+
+! Identity matrix
+
+  forall(j = 0:NC) eye(j,j) = 1.d0
+
+! *******************************
+! ***   PSEUDOSPECTRAL GRID   ***
+! *******************************
+
+! Fill the Chebyshev (or collocation) points and its weights.
+
+  do i=0,NC
+     xc(i)=dcos(dble(i*smallpi/NC))
+  end do
+
+  do i=0,NC
+     if ((i==0).or.(i==NC)) then
+        caux(i) = two
+     else
+        caux(i) = one
+     end if
+  end do
+
+! Fill radial coordinate
+  rmin = 0.d0
+  rmax = (dble(Nrtotal)-0.5d0)*dr(0)
+  do i=0,NC
+     raux(i)=r_x(xc(i),rmin,rmax)
+  end do
+! 
+  factor = 2.d0/(rmax-rmin)
+!
+! ******************************
+! *** DIFFERENTIAL OPERATORS ***
+! ******************************
+
+! Fill the derivative operators in D1.
+
+! First derivative
+
+! Upper left and lower right corners.
+
+  D1(0,0)= dble((two*NC**2+one)/6.d0)
+  D1(NC,NC) = -dble((two*NC**2+one)/6.d0)
+
+! Off-diagonal.
+
+  do i=0,NC
+     do j=0,NC
+        if (i/=j) D1(i,j) = caux(i)/caux(j) * (-one)**(i+j)/(xc(i)-xc(j))
+     end do
+  end do
+
+! Diagonal.
+
+!  do i=1,NC-1
+!     D1(i,i) = -0.5d0*xc(i)/(one-xc(i)**2)
+!  end do
+
+  do i=1,NC-1
+    do j=0,NC
+       if (i/=j) D1(i,i) = D1(i,i) - D1(i,j)
+    end do
+  end do
+
+! Second derivative of Chebyshev polynomials is a centrosymmetric matrix.
+  if (mod(NC,2)==0) then
+     naux = NC/2
+  else
+     naux = int(NC/2)
+  end if
+
+  do j=0,naux
+     do i=0,NC
+        do k=2,NC
+           do m=0,k-2
+              if(mod(m+k,2)==0) then
+                 D2(i,j) = D2(i,j) + k/(caux(k)*cn(m))*(k**2-m**2)*(-one)**(int(k*j/NC)+int(m*i/NC))*xc(k*j-NC*int(k*j/NC))*xc(m*i-NC*(m*i/NC))
+              end if
+           end do
+        end do
+        D2(i,j) = two/caux(j)/NC*D2(i,j)
+     end do
+  end do
+
+  do j=naux+1,NC
+     do i=0,NC
+        D2(i,j) = D2(NC-i,NC-j)
+     end do
+  end do
+
+  !D2 = matmul(D1,D1)
+
+! *****************************
+! *** DIFFERENTIAL OPERATOR ***
+! *****************************
+
+! In general, the ODE can be expressed as
+! L u = f ,
+! with L a differential operator. In our case, L is
+!            2
+! L = C0(r) d  + C1(r) d   + C2(r)
+!            r          r
+! Using the pseudospectral method, we only need the values of
+! the differential operator at the Chebyshev (or collocation) points. 
+! So, L can be expressed as a matrix.
+!
+! The matrix associated to the differential operator L is
+
+! L = C0(r)D2 + C1(r) D1 + C2(r)I, 
+! where I is the identity matrix.
+
+! To avoid confussion between the differential operator L and the number of refinement level l,
+! starting from here, instead of L, we will use D as the differential operator.
+
+  do i=0,NC 
+    D(i,:) = C0(i)*D2(i,:)+C1(i)*D1(i,:)+C2(i)*eye(i,:)
+  end do
+
+! ****************************
+! ***  BOUNDARY CONDITIONS ***
+! ****************************
+
+! The original operator D is non-invertible, 
+! but adding boundary conditions adds two more equations to the system, making the system invertible. 
+! This equations replace the first and last row of D, and C3.
+
+  bd = bound
+
+! Inner boundary
+
+  if (sym == +1) then
+! This is an even function, du/dr=0 at the origin.
+     D(NC,:) = D1 (NC,:)
+     C3(NC)  = zero
+
+  else if (sym == -1) then
+! This is an odd function, u(r=0)=0.
+     D(NC,:) = eye(NC,:)
+     C3(NC)  = zero
+  end if
+
+! Outer boundary
+
+  if (bound == "robin") then
+  ! For Dirichlet bc we need the extra factor due to the chain rule.
+  ! Also for stability we multiply the Robin bc by "r".
+
+     D(0,:) = raux(0)*factor*D1(0,:)+eye(0,:)
+     C3(0)  = u0!/(raux(0)*factor)
+     !D(0,:) = factor*D1(0,:)+eye(0,:)/raux(0)
+     !C3(0)  = u0/raux(0)
+  else if (bound == "dirichlet") then
+     D(0,:) = eye(0,:)
+     C3(0)  = u0
+
+  else if (bound == "newmann") then
+
+     D(0,:) = factor*D1(0,:)
+     C3(0)  = u0
+  end if
+
+! Matrix inversion
+
+! ********************************************
+! ***   INVERT THE DIFFERENTIAL OPERATOR   ***
+! ********************************************
+
+! This part depends on LAPACK. I comment this and use a simple solver 
+! to find the inverse operator.
+!
+! D_inv = D
+! nraux = NC+1
+!
+! DGETRF computes an LU factorization of a general M-by-N matrix A
+! using partial pivoting with row interchanges.
+
+! call DGETRF(nraux, nraux, D_inv, nraux, ipiv, info)
+
+! if (info /= 0) then
+!    stop 'Operator is numerically singular!'
+!    call die
+! end if
+
+! DGETRS solves the system A*x=B using the LU factorization computed by DGETRF.
+
+! call DGETRS(nraux, D_inv, nraux, ipiv, work, nraux, info)
+
+! if (info /= 0) then
+!    stop 'Matrix inversion failed!'
+!    call die
+! end if  
+
+
+  !call dgesv(NC+1,1,D,NC+1,ipiv,C3,NC+1,info)
+  !call dsgesv(NC+1,1,D,NC+1,ipiv,C3,NC+1,u,NC+1,work,swork,iter,info)
+
+!call LU decomposition routine
+!  call LUDCMP(D,NC+1,INDX,ri,rc)
+!call appropriate solver if previous return code is ok
+!  if (rc.eq.0) then
+!    call LUBKSB(D,NC+1,INDX,C3)
+!  endif
+
+!print results or error message
+!  if (rc.eq.1) then
+!    write(2,*) ' The system matrix is singular, no solution !'
+!    call die
+!  end if
+
+  !eye = D
+  call invrsmtx(D,D_inv,NC+1)
+
+  u = matmul(D_inv,C3)
+
+  
+  !u = C3
+  end subroutine ps_solver
+
+  function cn(n)
+  implicit none
+
+  integer cn,n
+  if (n==0) then
+     cn = 2
+  else
+     cn = 1
+  end if
+  return
+  end function
+
+
+
+
+  module chebyshev
+
+! This module contains a pseudospectral solver for a linear second order ODE.
+! Also the coordinate transformation between the standard radial coordinate "r",
+! and the Chebyshev poins (or collocation points) "x".
+! 
+  contains
+
+! Algebraic map between the standard radial coordinate r and the Chebyshev point x
+
+! r(x) = 1/2*(rmin+rmax)-1/2(rmin-rmax)*x
+
+  function r_x(x,rmin,rmax)
+
+  implicit none
+
+  real(8) r_x,x,rmin,rmax
+
+  r_x = 0.5d0*(rmin+rmax)-0.5d0*(rmin-rmax)*x
+  return
+  end function r_x
+
+! Inverse mapping 
+! x(r) = -2r/(rmin-rmax)+(rmin+rmax)/(rmin-rmax)
+
+  function x_r(r,rmin,rmax)
+
+  implicit none
+
+  real(8) x_r,r,rmin,rmax
+
+  x_r = -2.d0*r/(rmin-rmax)+(rmin+rmax)/(rmin-rmax)
+
+  return
+  end function x_r
+
+
+! Chebyshev polinomials of first kind can be defined as
+
+! T_n(x)=cos(n*acos(x))
+
+! where |x|<=1.
+
+  function ChebyshevT(n,x)
+  
+  implicit none
+
+  integer n
+  real(8) ChebyshevT,x
+
+  ChebyshevT=dcos(n*dacos(x))
+
+  return
+
+  end function ChebyshevT
+
+
+! **********************
+! ***   END MODULE   ***
+! **********************
+
+  end module chebyshev

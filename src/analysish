@@ -1,0 +1,181 @@
+  subroutine analysish
+
+    use parameters
+    use arrays
+    !use utils
+
+
+    implicit none
+
+    real(8), dimension(1:Npart) :: Qr,Jr      !Action angle arrays
+    complex(8),dimension (1:Npart)  :: exp_vals,conj_phik
+    complex(8) :: ii                          !imaginary unit
+    complex(8),allocatable,dimension(:) :: hk           !h_k mode
+    real(8),allocatable,dimension(:) :: abs_hk       !Magnitude h_k mode
+    integer  :: i,j                           !Counters
+    integer  :: mode                          !Number of modes
+
+    real(8) :: raux,paux
+    real(8) :: energy 
+    real(8) :: s, s1, s2, er1, er2, eta,argaux
+    real(8) :: smallpi
+
+    complex(8) :: phik
+
+    character(20) filestatus
+
+
+    ! Constants
+    smallpi =  acos(-1.0d0)
+
+    ! Set number of modes
+    mode = 4
+    allocate(hk(0:mode))
+    allocate(abs_hk(0:mode))
+    
+    !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(i)
+    do i=1,Npart
+
+          raux = r_part(i)
+          paux = p_part(i)
+
+          energy = -1.0/(1.0D0+dsqrt(1.0D0+raux**2)) + 0.5d0*Lfix**2/(raux**2) + 0.5D0*paux**2
+          er1 = dsqrt((1.d0+energy*(2.d0+Lfix**2)-dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+Lfix**2)))/(2.d0*energy**2))
+          er2 = dsqrt((1.d0+energy*(2.d0+Lfix**2)+dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+Lfix**2)))/(2.d0*energy**2))
+          s1 = 1.d0 + sqrt(1.d0+er1**2)
+          s2 = 1.d0 + sqrt(1.d0+er2**2)
+          s  = 1.d0 + sqrt(1.d0+raux**2)
+
+          argaux = (s1+s2-2.0*s)/(s2-s1)
+
+          if (paux>=0.d0) then
+            eta = dacos(sign(min(abs(argaux),1.0),argaux))
+
+          else
+            eta = dacos(-sign(min(abs(argaux),1.0),argaux))+smallpi
+          end if
+
+          Qr(i) = eta - sqrt((-2.d0*energy)**3)*sqrt(-Lfix**2-2.d0*energy-2.d0-0.5D0/energy)/(-2.d0*energy)*sin(eta)
+          Jr(i) = 1.d0/sqrt(-2.d0*energy)-0.5d0*(Lfix+sqrt(Lfix**2+4.d0))
+
+    end do
+    !$OMP END PARALLEL DO
+
+    ii = (0.d0,1.d0)
+
+    do i = 0,mode
+
+      exp_vals = exp(-ii*i*Qr)
+
+      do j=1,Npart
+        conj_phik(j) = conjg(phik(Jr(j), i, sp, sr))
+      end do
+
+      hk(i) = drc*dpc*sum(f*exp_vals*conj_phik)
+
+    end do
+
+    abs_hk = abs(hk)
+
+
+! *****************
+! *** SAVE DATA ***
+! *****************
+
+! **************************
+! ***   OPEN DATA FILE   ***
+! **************************
+
+! Is this the first time step?
+
+  if (t==0) then
+     filestatus = 'replace'
+  else
+     filestatus = 'old'
+  end if
+
+! Open file.
+
+  if (filestatus=='replace') then
+     open(101,file=trim(directory)//'/'//trim("hk")//'.tl',form='formatted',status=filestatus)
+  else
+     open(101,file=trim(directory)//'/'//trim("hk")//'.tl',form='formatted',status=filestatus,position='append')
+  end if
+
+
+! *********************
+! ***   SAVE DATA   ***
+! *********************
+
+  write(101,"(7ES16.8)") t,abs_hk(:)
+
+
+! ***************************
+! ***   CLOSE DATA FILE   ***
+! ***************************
+
+  close(101)
+
+
+  end subroutine analysish
+
+  function phik(J, l, sp, sr)
+
+
+    implicit none
+    
+    integer :: n
+    integer :: i
+    integer :: l
+    complex(8) :: phik
+    real(8) :: J,sp,sr
+    real(8) :: a, b, h,auxsum
+    real(8) :: smallpi
+
+    ! Constants
+
+    smallpi = acos(-1.0d0)
+
+    ! Define the integration limits
+    a = 0.0
+    b = 2.0*smallpi
+    
+    ! Number of intervals (must be even)
+    n = 2048
+    
+    ! Calculate the step size
+    h = (b - a) / real(n)
+    
+    ! Perform the integration
+    auxsum = phi(J,a,l,sp,sr) + phi(J,b,l,sp,sr)
+
+    do i = 1, n-1, 2
+        auxsum = auxsum + 4.0d0 * phi(J,a + real(i) * h,l,sp,sr)
+    end do
+    do i = 2, n-2, 2
+        auxsum = auxsum + 2.0d0 * phi(J,a + real(i) * h,l,sp,sr)
+    end do
+    
+    ! Calculate the result
+
+    phik = h / 3.0d0* auxsum
+
+    phik = 0.5d0/smallpi*phik
+    contains
+    
+    ! Define the function to be integrated
+    function phi(J, Q, l, sp, sr)
+        integer l
+        real(8) :: J,Q,sp,sr
+        complex(8) :: phi
+        complex(8) :: ii
+
+        ii = (0.d0,1.0d0)
+
+        phi = (exp(-sin(0.5d0*Q)**2/sp**2)*exp(-J**2/sr**2)*J**2*exp(-ii*l*Q))
+
+       
+    end function phi
+    
+
+  end function phik

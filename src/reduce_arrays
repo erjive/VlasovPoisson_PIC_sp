@@ -1,0 +1,50 @@
+
+subroutine reduce_arrays
+  use parameters
+  use arrays
+
+  implicit none
+  
+  integer i,j
+  integer counter,Npart_aux
+  real(8), dimension (1:Npart) :: r_aux,p_aux,f_aux
+
+! Copy the position and momentum of particles
+
+  r_aux = r_part
+  p_aux = p_part
+  f_aux = f
+! Deallocate all arrays
+
+
+  call deallocate_mem()
+
+! Count How many particles are still in the grid
+
+  counter = 0
+  do i=1,Npart
+    if (r_part(i)<rmax) counter = counter + 1
+  end do
+
+! Allocate arrays 
+
+  Npart_aux = Npart
+  Npart     = counter
+
+  call alloc_mem_set0
+
+  call construct_grid
+
+  j = 1
+  do i=1,Npart_aux
+    if (r_part(i)<rmax) then
+      r_part(j) = r_aux(i) 
+      p_part(j) = p_aux(i)
+      f(j)      = f_aux(i)
+      j = j+1
+    end if
+
+  end do
+  print *, "In the grid are still", Npart, "computational particles"
+
+end subroutine reduce_arrays
