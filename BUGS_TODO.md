@@ -190,17 +190,37 @@ avanza.
   Rama `feature/hdf5-output`, commit `feat(io): add optional HDF5
   output, selected via output_format parameter`. `hk.tl` y
   `vlasov_rhomix.tl` se quedaron en ASCII (fuera de alcance, chicos).
-- [ ] **Integrador simpléctico de orden superior** (Yoshida/Forest-Ruth
-  de 4º orden, compuesto de leapfrog) — permitiría un `dt` más grande
-  para el mismo error de conservación de energía. Como el costo total
-  escala directo con `Nt`, es la mejora con mayor apalancamiento
-  potencial sobre el tiempo total de una corrida larga.
+- [x] **Integrador simpléctico de orden superior** (Yoshida 1990,
+  4º orden, 3 sub-pasos tipo leapfrog). Agregado como opción nueva
+  `integrator="yoshida4"` (no reemplaza `leapfrog`, hay que elegirlo
+  explícitamente). Validado con cuidado porque las primeras pruebas
+  autogravitantes *explotaron* (tanto `leapfrog` como `yoshida4`) —
+  no era un bug del integrador nuevo, era `dt` insuficiente cerca de
+  la barrera centrífuga (`L²/r²`, ver el ítem de `set_timestep`
+  abajo). Con potencial de fondo suave y momento angular alejado de
+  `r=0`: `yoshida4` da **6600× menos deriva de energía** que
+  `leapfrog` al mismo `dt` (9.6×10⁻⁹ vs 6.3×10⁻⁵), a ~2× el costo por
+  paso (no 4×, la evaluación de fuerza no es todo el costo por paso).
+  Con autogravedad (partículas lejos de `r=0` para que no explote):
+  **sin diferencia medible** entre ambos (1.85% de deriva los dos) —
+  el ruido de discretización del propio método PIC (densidad estimada
+  con partículas finitas) domina sobre el error de integración
+  temporal, así que un orden temporal mayor no ayuda ahí a menos que
+  suba la resolución (más partículas). Recomendación: usar
+  `yoshida4` para corridas con `forcetype="bg"` (fondo fijo, sin
+  autointeracción); para `autointeraction=.true.` el beneficio no
+  está probado y cuesta ~2× igual. — commit `feat(integrator): add
+  optional 4th-order symplectic integrator (yoshida4)`
 - [ ] **`set_timestep` solo se llama una vez, antes del bucle principal**
   — en modo autogravitante `Fmax` puede crecer si el sistema colapsa
   (justo lo que se ve en la sección "compactness" del artículo).
   Reevaluarlo periódicamente corrige un problema de precisión/
   estabilidad potencial y puede acelerar las fases tempranas de baja
-  fuerza.
+  fuerza. **Confirmado como problema real** al validar `yoshida4`:
+  un caso con momento angular chico y partículas pasando cerca de
+  `r=0` hizo que *tanto* `leapfrog` como `yoshida4` explotaran con
+  `dt` fijo (calculado una sola vez al inicio) — cualquier integrador
+  de paso fijo es vulnerable a esto.
 - [ ] Paralelizar la generación de partículas iniciales en
   `initial_data.f90` (estados `aa`/`gaussian1`) — el `!$OMP` ya está
   escrito pero deshabilitado por la dependencia secuencial del índice
