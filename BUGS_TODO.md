@@ -298,9 +298,29 @@ avanza.
   `Makefile` por completo. No vale la pena perseguir esta idea en este
   código/máquina tal como está. `-ffast-math` ni se probó, dado que
   las otras dos ya no rindieron.
-- [ ] Vectorizar/agrupar la cuadratura de `phik` en `analysish.f90`
-  (hoy hace Simpson de 21 puntos por partícula y por modo, con
-  llamadas a función una por una).
+- [x] **Vectorizar/agrupar la cuadratura de `phik` en `analysish.f90`.**
+  `phik` integraba $g(J,l,Q)\cdot e^{-i\cdot\text{modo}\cdot Q}$ por
+  Simpson (21 puntos), llamada una vez por (partícula, modo) — 5 veces
+  por partícula — recalculando $g(J,l,Q)$ (la parte que NO depende del
+  modo) desde cero cada vez. Reestructurado a partícula-externo,
+  calculando $g$ una sola vez por partícula y reusándola en los 5
+  modos. De paso: el resultado de `phik` siempre fue real (el código
+  original se quedaba con `real(...)`, descartando la parte imaginaria
+  en silencio) — reemplazado `exp(-i·modo·Q)` por `cos(modo·Q)`
+  directamente, evitando calcular el `sin` que de todos modos se
+  tiraba. También paralelizado sobre partículas con
+  `REDUCTION(+:hk)` (acumulador de solo 5 elementos, sin atomics).
+  Encontré y corregí un bug propio antes de integrarlo (el extremo
+  $Q=\pi$ necesita el factor $\cos(\text{modo}\cdot\pi)=(-1)^{modo}$,
+  no asumir que es 1 como en $Q=0$) probando la cuadratura aislada
+  contra una referencia en Python del algoritmo *original* antes de
+  tocar el archivo real. Validado: `hk.tl` idéntico byte a byte contra
+  la versión anterior en 2 escenarios distintos, y entre 1/4/8 hilos.
+  Medido (200k partículas, sin autogravedad, 10 llamadas a
+  `analysish`, 1 hilo): mediana 14.2s→9.5s, **~1.5× más rápido** solo
+  por reusar $g(Q)$; más hilos no dieron ganancia adicional en este
+  benchmark pero tampoco regresión. — commit `perf(analysish): reuse
+  the mode-independent quadrature weight across modes`
 
 ## Mejoras de diseño (no son bugs)
 
