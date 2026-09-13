@@ -190,13 +190,6 @@ avanza.
   Rama `feature/hdf5-output`, commit `feat(io): add optional HDF5
   output, selected via output_format parameter`. `hk.tl` y
   `vlasov_rhomix.tl` se quedaron en ASCII (fuera de alcance, chicos).
-- [ ] **Reusar los buffers de `build_cell_list` en vez de
-  reservarlos/liberarlos en cada llamada** — hoy hace `allocate`/
-  `deallocate` de 4 arreglos de tamaño `Npart` en cada llamada a
-  `density()`/`avg_density()`, y en modo autogravitante eso es cada
-  paso (hasta ~1.28M veces en una corrida a $t=10000$). Reservar una
-  vez a nivel de módulo y solo re-dimensionar cuando cambie `Npart`
-  (tras `reduce_arrays`).
 - [ ] **Integrador simpléctico de orden superior** (Yoshida/Forest-Ruth
   de 4º orden, compuesto de leapfrog) — permitiría un `dt` más grande
   para el mismo error de conservación de energía. Como el costo total
