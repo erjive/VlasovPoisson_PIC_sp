@@ -132,6 +132,17 @@ avanza.
   compilan, están desincronizados de sus homónimos activos, y
   `poisson_ps` referencia un módulo `chebyshev` inexistente. Mover a
   `legacy/` o borrar.
+- [ ] **`eps` (longitud de suavizado del término centrífugo) está fija
+  en `0.0` siempre** (`set_grid_size` en `utils.f90`, línea con
+  `eps = 0.0D0`, con el cálculo real comentado justo arriba). Esto
+  significa que el potencial centrífugo $L^2/(2r^2)$ es genuinamente
+  singular en $r=0$ sin ningún suavizado — encontrado al validar el
+  `set_timestep` adaptativo: un encuentro cercano con $r\approx 0$ y
+  momento angular chico sigue dando ~350% de deriva de energía
+  incluso con `dt` adaptativo, porque no hay forma de "suavizar" la
+  fuerza cerca de la singularidad. Activar `eps` (o exponerlo como
+  parámetro configurable) podría mejorar sustancialmente la
+  estabilidad de corridas con partículas de bajo momento angular.
 
 ## Mejoras de rendimiento
 
@@ -211,16 +222,37 @@ avanza.
   autointeracción); para `autointeraction=.true.` el beneficio no
   está probado y cuesta ~2× igual. — commit `feat(integrator): add
   optional 4th-order symplectic integrator (yoshida4)`
-- [ ] **`set_timestep` solo se llama una vez, antes del bucle principal**
-  — en modo autogravitante `Fmax` puede crecer si el sistema colapsa
-  (justo lo que se ve en la sección "compactness" del artículo).
-  Reevaluarlo periódicamente corrige un problema de precisión/
-  estabilidad potencial y puede acelerar las fases tempranas de baja
-  fuerza. **Confirmado como problema real** al validar `yoshida4`:
-  un caso con momento angular chico y partículas pasando cerca de
-  `r=0` hizo que *tanto* `leapfrog` como `yoshida4` explotaran con
-  `dt` fijo (calculado una sola vez al inicio) — cualquier integrador
-  de paso fijo es vulnerable a esto.
+- [x] **`set_timestep` solo se llamaba una vez, antes del bucle
+  principal** — en modo autogravitante `Fmax` puede crecer si el
+  sistema colapsa. Se activó la reevaluación periódica (cada paso,
+  cuando `autointeraction=.true.`), reemplazando el `if
+  (forcetype=="self")` comentado que nunca se hubiera disparado (ver
+  el ítem de `forcetype="self"` sin efecto, arriba) por `if
+  (autointeraction)`, que es el flag que de verdad controla si la
+  fuerza cambia con el tiempo.
+
+  De paso, al validar esto contra el caso que hizo explotar a
+  `yoshida4` (momento angular chico, partículas cerca de `r=0`)
+  apareció un **segundo bug independiente** que anulaba por completo
+  la reevaluación: `set_timestep()` solo calculaba `Fmax` si
+  `BGtype/="null"` — con `BGtype="null"` y autogravedad pura
+  (`autointeraction=.true.`), `Fmax` nunca se tocaba y se quedaba
+  fijo en `0.0` toda la corrida, sin importar qué tan grande se
+  pusiera la fuerza real. Confirmado con instrumentación directa.
+  Arreglado a `BGtype/="null" .or. autointeraction`.
+
+  Con ambos arreglos: el caso que antes divergía a ~10¹⁴ ya no
+  explota (queda acotado, ~350% de deriva) — `dt` se ve encogiendo
+  en los primeros pasos (0.025→0.0091→0.0176→de vuelta a 0.025)
+  en respuesta al encuentro cercano inicial. El ~350% de deriva que
+  queda es un caso genuinamente extremo (encuentro cercano casi
+  singular, sin suavizado — `eps` está fijo en `0.0` en
+  `set_grid_size`, posible mejora futura), no una promesa de
+  conservación perfecta de energía. Verificado sin regresión en el
+  caso suave (sin autogravedad: deriva idéntica bit a bit) y en un
+  caso autogravitante bien resuelto (partículas lejos de `r=0`: sin
+  cambio, 1.85% en ambos). — commit `feat(timestep): adapt dt
+  periodically during self-gravitating runs`
 - [ ] Paralelizar la generación de partículas iniciales en
   `initial_data.f90` (estados `aa`/`gaussian1`) — el `!$OMP` ya está
   escrito pero deshabilitado por la dependencia secuencial del índice
