@@ -974,7 +974,7 @@ subroutine reduce_arrays
 
   j = 1
   do i=1,Npart_aux
-    if (r_aux(i)<rmax) then
+    if (r_aux(i)<=rmax) then
       r_part(j) = r_aux(i) 
       p_part(j) = p_aux(i)
       l_part(j) = l_aux(i)
