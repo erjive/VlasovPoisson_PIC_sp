@@ -71,6 +71,20 @@ avanza.
   `fix(openmp): remove collapse(2) data race in density() and
   poisson_rk()`
 
+## Resueltos (cont. 4)
+
+- [x] **`utils.f90` `deallocate_mem` era código muerto y roto**:
+  intentaba desasignar `p_part_hp` (nunca asignado — typo por
+  `p_part_h`), `res` (nunca asignado, con o sin `conv_test`),
+  desasignaba `force`/`pot`/`dev_pot` sin comprobar `autointeraction`,
+  y desasignaba `pot`/`dev_pot` dos veces si `autointeraction=.true.`.
+  Además le faltaba `l_part` (fuga). No se llamaba desde ningún lado.
+  Arreglado para reflejar exactamente `alloc_mem_set0`, y se agregó
+  la llamada real al final de `main.f90` para poder validarlo en
+  ejecución. Probado en ambas configuraciones (`autointeraction`
+  `.true.`/`.false.`): terminan limpio con "Memory deallocated". —
+  commit `fix(memory): repair deallocate_mem and actually call it`
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
@@ -89,15 +103,6 @@ avanza.
   solo reconoce `"gaussian1"`, no `"gaussian"`), y no hay `else`/`stop`
   de captura — con la configuración de fábrica, `f` queda en cero en
   silencio.
-- [ ] **`utils.f90` `reduce_arrays`: operadores de comparación
-  inconsistentes** entre el conteo (`r_part(i)<=rmax`) y la copia
-  (`r_aux(i)<rmax`) — una partícula justo en `r=rmax` deja una entrada
-  sin inicializar en los arreglos reasignados.
-- [ ] **`arrays.f90` `deallocate_mem` es código muerto y roto**: intenta
-  desasignar `p_part_hp` (nunca asignado), desasigna `force`/`pot`/
-  `dev_pot` sin comprobar `autointeraction`, y los desasigna dos veces
-  si `autointeraction=.true.`. Hoy no se llama desde ningún lado, pero
-  crashea en cuanto alguien lo use.
 - [ ] **`grav_force.f90` / `parameters.f90`: `forcetype="self"` es una
   opción documentada que no hace nada.** `main.f90` bifurca sobre
   `forcetype=="self"`, pero `grav_force.f90` solo mira `forcetype=="bg"`
