@@ -261,9 +261,19 @@ avanza.
 - [ ] Cachear la evaluación de `Sn(...)` en `density()` — se calcula
   dos veces con los mismos argumentos (una para `rho`, otra para
   `curr`) en el bucle más caliente del código.
-- [ ] Flags de compilación más agresivas (`-march=native`, `-flto`);
-  `-ffast-math` con cautela — necesitaría la misma validación
-  bit-a-bit que se le hizo a la lista de celdas.
+- [x] **Intentado y revertido: `-march=native` / `-flto`.** Probado y
+  medido con cuidado (binario de referencia sin flags, comparación
+  intercalada, aislando cada flag por separado en dos builds
+  distintos para no confundirlos entre sí — mismo rigor que con el
+  intento de reuso de buffers). Resultado en este CPU (i7 Haswell,
+  AVX2/FMA) y este código: `-march=native` solo **no dio ninguna
+  ganancia medible** (idéntico a la base en 50k y 200k partículas, a
+  veces hasta un poco peor dentro del ruido). `-flto` solo fue una
+  **regresión clara de ~30%** (0.65s vs 0.50s, repetible). Combinados,
+  el mismo ~30% de regresión (dominado por `-flto`). Revertido el
+  `Makefile` por completo. No vale la pena perseguir esta idea en este
+  código/máquina tal como está. `-ffast-math` ni se probó, dado que
+  las otras dos ya no rindieron.
 - [ ] Evitar copiar arreglos completos cada paso (`r_part_p=r_part`,
   `p_part_p=p_part` en `main.f90`) con un esquema ping-pong de índices
   en vez de copia.
