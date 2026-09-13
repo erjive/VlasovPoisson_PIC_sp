@@ -267,9 +267,24 @@ avanza.
   con retornos decrecientes más allá de los 4 núcleos físicos, como
   se esperaba). — commit `perf(initial_data): parallelize gaussian1/aa
   candidate generation`
-- [ ] Cachear la evaluación de `Sn(...)` en `density()` — se calcula
-  dos veces con los mismos argumentos (una para `rho`, otra para
-  `curr`) en el bucle más caliente del código.
+- [x] **Intentado y revertido: cachear `Sn(...)` en `density()` +
+  evitar copiar `r_part_p`/`p_part_p` cada paso (ping-pong en
+  `main.f90`).** Ambos implementados, validados bit a bit contra la
+  versión anterior en 4 escenarios (euler, leapfrog, yoshida4,
+  autogravitante) — correctos. Al medir tiempo: **cada uno por
+  separado, sin regresión medible** (10 corridas intercaladas cada
+  uno contra la referencia, dentro del ruido). **Combinados: ~20% más
+  lento, de forma consistente y reproducible** (10 corridas
+  intercaladas, cero superposición entre las dos distribuciones —
+  23-26s vs 29.5-31s en una corrida de 3000 pasos autogravitante).
+  No encontré una explicación clara — probablemente alguna interacción
+  del optimizador de gfortran entre las dos subrutinas modificadas a
+  la vez (parecido en espíritu a la pesimización de arreglos a nivel
+  de módulo que ya vimos con el intento de reuso de buffers, pero acá
+  ninguno de los dos cambios toca arreglos de módulo). Revertidos
+  ambos por completo — ninguno de los dos demostró una ganancia
+  medible por sí solo como para justificar el riesgo de la
+  interacción al combinarlos.
 - [x] **Intentado y revertido: `-march=native` / `-flto`.** Probado y
   medido con cuidado (binario de referencia sin flags, comparación
   intercalada, aislando cada flag por separado en dos builds
@@ -283,9 +298,6 @@ avanza.
   `Makefile` por completo. No vale la pena perseguir esta idea en este
   código/máquina tal como está. `-ffast-math` ni se probó, dado que
   las otras dos ya no rindieron.
-- [ ] Evitar copiar arreglos completos cada paso (`r_part_p=r_part`,
-  `p_part_p=p_part` en `main.f90`) con un esquema ping-pong de índices
-  en vez de copia.
 - [ ] Vectorizar/agrupar la cuadratura de `phik` en `analysish.f90`
   (hoy hace Simpson de 21 puntos por partícula y por modo, con
   llamadas a función una por una).
