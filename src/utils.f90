@@ -303,46 +303,60 @@ end subroutine construct_grid
 
   !> Set the time step.
   !! Here we find the time step using information from the
-  !! Courant factor and the maximum value of the momentum.
+  !! Courant factor, the maximum value of the momentum, and
+  !! the maximum value of the force (acceleration).
   subroutine set_timestep
 
 ! *********************
 ! ***   TIME STEP   ***
 ! *********************
 
-! Here we find the time step using information from the
-! Courant factor and the maximum value of the momentum.
-
 ! Make sure that the Courant condition is satisfied in
-! the r direction.
+! the r direction: a particle should not cross more than
+! a fraction "courant" of a grid cell dr per time step.
 
   integer i
   real(8) dtr,dtp       ! Auxiliary variables.
-!  real(8) pmax_aux,Fmax_aux
-  
-!  pmax_aux = MAXVAL(abs(p_part))
-!  dtr = courant*dr/pmax_aux
+
   dtr = courant*dr/pmax
-! Now make sure that it is also satisfied in the p direction.
-! For this we need to find the maximum value of the force.
+
+! Now bound the time step using the maximum value of the
+! force (acceleration).  Rather than requiring that the
+! momentum change per step stay below a fixed momentum-space
+! cell width dpc (a resolution scale unrelated to the actual
+! dynamics, and linear in 1/Fmax, i.e. needlessly restrictive
+! for large forces), we use the standard "acceleration"
+! criterion from symplectic N-body/leapfrog integration
+! (e.g. Gadget-2, Springel 2005): the time to move a distance
+! drc (the radial resolution scale of the phase-space support)
+! under a constant acceleration Fmax, i.e.
+!
+!   dtp = courant * sqrt(2*drc/Fmax)
+!
+! This is directly tied to the local curvature of the force
+! field (an oscillator integrated with leapfrog is stable for
+! dt*omega <~ 2, with omega^2 ~ dF/dr) instead of to an
+! arbitrary momentum bin size, and it is less restrictive than
+! the previous criterion when Fmax is large, since it scales
+! as 1/sqrt(Fmax) instead of 1/Fmax.
 
   if (BGtype /= "null") then
     Fmax = 0.0d0
 
-!    Fmax=maxval(force_part)
     do i=1,Npart
        Fmax = max(Fmax,abs(force_part(i)))
     end do
 
-    dtp = courant*dpc/Fmax
-
-! Fix the time step as the smallest bvalue between dtr and dtp.
-
-    dt = min(dtr,dtp)
-  else 
+    if (Fmax>0.0d0) then
+       dtp = courant*sqrt(2.0d0*drc/Fmax)
+       dt  = min(dtr,dtp)
+    else
+       dt = dtr
+    end if
+  else
     dt = dtr
   end if
-    dt = dtr
+
   end subroutine set_timestep
 
 
