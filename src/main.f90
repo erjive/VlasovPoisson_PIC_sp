@@ -9,6 +9,7 @@ program VP_PIC
   use parameters
   use arrays
   use utils
+  use hdf5_io
 
 
 ! Declare variables.
@@ -38,6 +39,8 @@ program VP_PIC
 
   call system('mkdir -p '//trim(directory))
   call system('cp input_parameters '//trim(directory))
+
+  if (output_format=="hdf5") call open_hdf5_file()
 
 ! Initialize time.
 
@@ -90,7 +93,11 @@ program VP_PIC
 ! *********************************
 ! ***   SAVE THE INITIAL DATA   ***
 ! *********************************
-   call save_data()
+   if (output_format=="hdf5") then
+      call save_data_hdf5(0)
+   else
+      call save_data()
+   end if
 
 
 ! *************************************
@@ -262,7 +269,11 @@ program VP_PIC
 
      if (mod(l,spatial_output).eq.0) then
 
-       call save_data()
+       if (output_format=="hdf5") then
+          call save_data_hdf5(l)
+       else
+          call save_data()
+       end if
 
      end if
 
@@ -314,6 +325,8 @@ program VP_PIC
   print *
   print *
   print *
+
+  if (output_format=="hdf5") call close_hdf5_file()
 
   call deallocate_mem()
 
