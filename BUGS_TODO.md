@@ -148,8 +148,33 @@ avanza.
   numérico, no con un bug. — commit `perf(density): replace
   O(Nr*Npart) brute-force deposit/interpolation with a cell list`.
   Nota: con la optimización, más hilos ya no ayuda claramente a
-  Npart moderado (ver el commit) — posible trabajo futuro: paralelizar
-  `build_cell_list` o reusar sus buffers entre llamadas.
+  Npart moderado (ver el commit).
+- [x] **Intentado y revertido: reusar los buffers de `build_cell_list`**
+  en vez de reservarlos/liberarlos en cada llamada (para evitar el
+  `allocate`/`deallocate` de arreglos `Npart` en cada paso, en modo
+  autogravitante). Implementado moviendo `cell_start`/`particle_order`
+  y los arreglos auxiliares a nivel de módulo (`arrays.f90`),
+  persistentes entre llamadas. **Empeoró el rendimiento en vez de
+  mejorarlo.** Con instrumentación directa (500 llamadas): el overhead
+  real de `allocate`/`deallocate` que se quería eliminar era chico
+  (0.227s de 2.13s totales, ~10%), y el propio bucle de depósito
+  — algorítmicamente idéntico en ambas versiones — pasó de 1.902s a
+  3.063s al leer de arreglos a nivel de módulo en vez de argumentos
+  mudos locales con `intent()` explícito (hipótesis: gfortran pierde
+  margen para asumir ausencia de aliasing y vectoriza peor). Revertido
+  por completo (`arrays.f90`/`density.f90` de vuelta al commit
+  anterior); no vale la pena perseguir esta variante de la idea.
+- [x] **Bug nuevo encontrado de paso: `r(0)` se escribía fuera de los
+  límites del arreglo cuando `rmin>0`** (`construct_grid` llena
+  `r(i)` para `i=0,Nr` en ese caso, pero `alloc_mem_set0` solo
+  reservaba `r(1:Nr)`, ya que `ghost=0` cuando `rmin>0`). Corrompía
+  el heap en silencio — nunca se detectaba porque nada validaba la
+  integridad del heap hasta que algo lo liberaba, y `deallocate_mem`
+  era código muerto hasta hace pocos commits. Encontrado por casualidad
+  al validar el intento de reuso de buffers de arriba, con un caso de
+  prueba `rmin>0` — la primera vez en esta sesión que se ejercitó
+  `rmin>0` junto con `deallocate_mem` realmente ejecutándose. — commit
+  `fix(grid): allocate r(0:Nr) for rmin>0, not r(1:Nr)`
 - [ ] **`avg_density()` corre cada paso en modo autogravitante**
   (vía `grav_force()→poisson_rk()`), no solo cada `spatial_output`
   como `density()`. No es un bug — es inherente al método de campo
