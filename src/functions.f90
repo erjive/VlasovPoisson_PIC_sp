@@ -68,9 +68,9 @@ module functions
 
       end if
 
-    else if (n>4) then
+    else
 
-       print *, "B-spline of order greater than 4 not implemented"
+       print *, "B-spline of order",n,"not implemented (valid orders are 1-4)"
        print *, "Aborting ..."
        stop
 
@@ -131,8 +131,8 @@ module functions
       end if
 
 
-    else if (n>3) then
-       print *, "Weight function of order greater than 4 not implemented"
+    else
+       print *, "Weight function of order",n,"not implemented (valid orders are 1-3)"
        print *, "Aborting ..."
        stop
     end if
