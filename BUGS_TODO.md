@@ -55,6 +55,22 @@ avanza.
   usando `<=rmax` en ambos lados. — commit `fix(reduce_arrays): use
   consistent <=rmax in count and copy loops`
 
+## Resueltos (cont. 3)
+
+- [x] **`density.f90` / `poisson_rk.f90`: `collapse(2)` sin protección
+  (condición de carrera OpenMP).** Los bucles más caros del código
+  (`O(Nr×Npart)`) acumulan en `rho(i)`/`curr(i)`/`avg_rho(i)` y
+  `pot_part(i)`/`force_part(i)`, indexados solo por el índice externo,
+  pero paralelizaban con `collapse(2)` sobre externo+interno sin
+  `atomic`/`reduction` — dos hilos podían caer en el mismo `i` (con
+  distinto `j`) a la vez. Estaba dormido mientras `-fopenmp` estaba
+  roto en el Makefile; quedó activo al arreglarlo. Arreglado
+  paralelizando solo en el índice externo (mismo patrón que ya usa
+  correctamente `avg_density` en el mismo archivo). Verificado:
+  3 corridas con 8 hilos dan salida idéntica byte a byte. — commit
+  `fix(openmp): remove collapse(2) data race in density() and
+  poisson_rk()`
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
