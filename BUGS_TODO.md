@@ -314,13 +314,34 @@ avanza.
   $Q=\pi$ necesita el factor $\cos(\text{modo}\cdot\pi)=(-1)^{modo}$,
   no asumir que es 1 como en $Q=0$) probando la cuadratura aislada
   contra una referencia en Python del algoritmo *original* antes de
-  tocar el archivo real. Validado: `hk.tl` idéntico byte a byte contra
-  la versión anterior en 2 escenarios distintos, y entre 1/4/8 hilos.
+  tocar el archivo real.
   Medido (200k partículas, sin autogravedad, 10 llamadas a
   `analysish`, 1 hilo): mediana 14.2s→9.5s, **~1.5× más rápido** solo
   por reusar $g(Q)$; más hilos no dieron ganancia adicional en este
   benchmark pero tampoco regresión. — commit `perf(analysish): reuse
   the mode-independent quadrature weight across modes`
+  **CORRECCIÓN (encontrada comparando main vs fix en una corrida
+  completa):** la afirmación de "hk.tl idéntico byte a byte contra la
+  versión anterior" era **incorrecta** — de hecho no lo era, y esto
+  reveló que la reescritura corrigió, sin que me diera cuenta en su
+  momento, un **bug real preexistente** (presente en `main` y en todo
+  el historial de `fix` hasta este commit): el código original llamaba
+  `phik(Jr(j),l_part(j),l0,mode,sp,sr,sl)` dentro de
+  `do i=0,mode ... end do`, pasando la variable **`mode`** (constante,
+  siempre 4, el número total de modos) en vez de **`i`** (el modo
+  actual de la iteración). Por lo tanto `phik` se evaluaba con
+  $\cos(4\cdot Q)$ (o $e^{-i4Q}$) para **todos** los modos 0..3, no con
+  $\cos(i\cdot Q)$ — solo el modo 4 (el último) daba el resultado
+  correcto por coincidencia. Confirmado reconstruyendo el binario justo
+  antes de este commit (`2f345bc^`) y comparando `hk.tl` contra el
+  binario actual con una corrida corta idéntica: h0..h3 difieren
+  (p.ej. h0: 4.06344320E-06 → 4.27107028E-06, ~5.1%), h4 es idéntico
+  (como se espera, ya que ahí `mode`==`i`==4 en el código viejo). Esto
+  también explica exactamente la diferencia de ~5% en h0 vista en la
+  comparación main-vs-fix de una corrida larga (100k pasos, sin
+  autointeracción): main nunca tuvo esta corrección. No es un bug
+  nuevo en la lista — es una reclasificación: era un bug real en
+  `phik`, no solo una optimización, y ya está corregido en `fix`.
 
 ## Mejoras de diseño (no son bugs)
 
