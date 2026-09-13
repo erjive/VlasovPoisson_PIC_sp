@@ -74,9 +74,20 @@ subroutine density
     end do
   end do
   !$OMP END PARALLEL DO
+
+! Ghost points using the reflection symmetry f(r,p) = f(-r,-p),
+! which for scalars integrated over p (rho, avg_rho) is even:
+! rho(-r) = rho(r).  The grid is staggered by dr/2 to avoid the
+! r=0 singularity (r(i) = (i-0.5)*dr), so the ghost point with
+! index (1-k) sits at -r(k) and must mirror the physical point k,
+! i.e. rho(1-k) = rho(k) (NOT rho(k-1) = rho(k), which instead
+! overwrites the physical point at index (k-1) with the value at
+! k, corrupting rho near the origin).  Compare with the correct
+! reflection already used for pot/dev_pot in poisson_rk.f90.
+
   do i=1,ghost
-      rho(i-1) = rho(i)
-      avg_rho(i-1) = avg_rho(i)
+      rho(1-i) = rho(i)
+      avg_rho(1-i) = avg_rho(i)
   end do
 
 
@@ -193,9 +204,11 @@ subroutine avg_density
   end do
   !$OMP END PARALLEL DO
 
+! Ghost points using the reflection symmetry avg_rho(-r) = avg_rho(r)
+! (see the matching note in subroutine density above).
 
   do i=1,ghost
-      avg_rho(i-1) = avg_rho(i)
+      avg_rho(1-i) = avg_rho(i)
   end do
 
   avg_rho = factor*m0*avg_rho
