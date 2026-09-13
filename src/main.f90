@@ -315,4 +315,6 @@ program VP_PIC
   print *
   print *
 
+  call deallocate_mem()
+
 end program VP_PIC

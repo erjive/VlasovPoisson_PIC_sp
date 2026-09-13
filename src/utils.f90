@@ -223,31 +223,41 @@ module utils
   end subroutine alloc_mem_set0
 
 
-  !> Free all the memory in the allocated arrays
+  !> Free all the memory in the allocated arrays.
+  !!
+  !! Must mirror alloc_mem_set0 exactly: deallocate every array
+  !! allocated there (and only those), each guarded by the same
+  !! condition used to allocate it.  Deallocating an array that was
+  !! never allocated is a runtime error, not a no-op.
   subroutine deallocate_mem
 
   deallocate(r_part)
   deallocate(r_part_p)
   deallocate(p_part)
   deallocate(p_part_p)
-  deallocate(p_part_hp)
+  deallocate(p_part_h)
+  deallocate(l_part)
   deallocate(pot_part)
   deallocate(force_part)
 
   deallocate(r)
-  deallocate(force)
-  deallocate(pot)
-  deallocate(dev_pot)
+
+! force, pot and dev_pot are only allocated in alloc_mem_set0
+! if (autointeraction); deallocating them unconditionally (as this
+! subroutine used to) crashes when autointeraction=.false. (never
+! allocated), and deallocating pot/dev_pot a second time afterwards
+! when autointeraction=.true. is a double free.
+
+  if (autointeraction) then
+    deallocate(force)
+    deallocate(pot)
+    deallocate(dev_pot)
+  end if
 
 ! Density function f
 
   deallocate(f)
 !  deallocate(f_p)
-
-! Array for residual evaluation (only for convergence study)
-  if (conv_test=="on") then
-    deallocate(res)
-  end if
 
   deallocate(rho)
   deallocate(rho_p)
@@ -256,13 +266,8 @@ module utils
   deallocate(curr_p)
   deallocate(cont)
 
-  if (autointeraction) then
-    deallocate(pot    )
-    deallocate(dev_pot)
-  end if
-  
   print *, "Memory deallocated"
-  
+
   end subroutine deallocate_mem
 
 
