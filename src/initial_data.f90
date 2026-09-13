@@ -49,13 +49,21 @@
     print *, "(drc,dpc,dlc)=",drc,dpc,dlc
     if(state.eq."gaussian1") then
 
+!     indx used to be incremented by hand each iteration, which is a
+!     loop-carried dependency that blocks parallelizing the triple
+!     loop below (hence the disabled "!!$OMP" that used to be here).
+!     Since (k,i,j) -> indx = (k-1)*Nrc*Npc + (i-1)*Npc + j is exactly
+!     the index this nesting order produces one at a time, computing
+!     it directly removes that dependency: every thread writes only
+!     to its own indx, so the loop is safe to collapse fully.
 
-!      !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,raux,paux)
-      indx = 1 
+      !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(i,j,k,indx,raux,paux,laux) COLLAPSE(3)
       do k=1,Nlc
       do i=1,Nrc
         do j=1,Npc
-          
+
+            indx = (k-1)*Nrc*Npc + (i-1)*Npc + j
+
             raux = rminc+(dble(i))*drc
             paux = pminc+dble(j)*dpc
             laux = lminc+dble(k)*dlc
@@ -64,29 +72,25 @@
             l_part(indx)  = laux
             f(indx)       = gaussian(1.0D0,r0,p0,l0,raux,paux,laux,sr,sp,sl)
 
-            indx = indx+1
           end do
         end do
       end do
-!      !$OMP END PARALLEL DO
+      !$OMP END PARALLEL DO
 
       f_max = maxval(f)
 
-      indx = 1
-      do k=1,Nlc
-        do i=1,Nrc
-          do j=1,Npc
-        
-             if (f(indx)<= cutoff*f_max) then
-                f(indx)=0.0D0
-                r_part(indx) = 1000000.D0
-             end if
-!          !print *, Qr,Jr
-             indx = indx+1
-          end do
-        end do 
+!     Cutoff filtering only depends on the particle's own indx, not
+!     on i/j/k individually, so it's just a flat loop over 1:Npart.
+
+      !$OMP PARALLEL DO SCHEDULE(GUIDED)
+      do indx=1,Npart
+         if (f(indx)<= cutoff*f_max) then
+            f(indx)=0.0D0
+            r_part(indx) = 1000000.D0
+         end if
       end do
- 
+      !$OMP END PARALLEL DO
+
       call reduce_arrays
 
 
@@ -158,18 +162,27 @@
 
     else if(state .eq."aa") then
 
-      !!$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,raux,paux)
-      indx = 1
+!     Same indx dependency removed as in the gaussian1 branch above
+!     (the "aa" branch's own !!$OMP was disabled for the same reason).
+!     This loop body is far more expensive per iteration (several
+!     sqrt/trig evaluations), so it's the branch that benefits most
+!     from actually running in parallel.
+
+      !$OMP PARALLEL DO SCHEDULE(GUIDED) &
+      !$OMP PRIVATE(i,j,k,indx,raux,paux,laux,energy,er1,er2,s1,s2,s,argaux,eta,Q3,J3) &
+      !$OMP COLLAPSE(3)
       do k=1,Nlc
         do i=1,Nrc
           do j=1,Npc
-          
+
+            indx = (k-1)*Nrc*Npc + (i-1)*Npc + j
+
             raux = rminc+dble(i)*drc
             paux = pminc+dble(j)*dpc
             laux = lminc+dble(k)*dlc
 
             r_part(indx) = raux
-            p_part(indx) = paux     
+            p_part(indx) = paux
             l_part(indx) = laux
 
             energy = -1.0/(1.0D0+dsqrt(1.0D0+raux**2)) + 0.5d0*laux**2/(raux**2) + 0.5D0*paux**2
@@ -201,29 +214,23 @@
               f(indx) = 0.D0
               r_part(indx) = 10000.D0
             end if
-            indx = indx+1
           end do
         end do
       end do
-!      !$OMP END PARALLEL DO
-      
+      !$OMP END PARALLEL DO
+
       f_max = maxval(f)
 
-      indx = 1
-      do k=1,Nlc
-        do i=1,Nrc
-          do j=1,Npc
-        
-             if (f(indx)<= cutoff*f_max) then
-                f(indx)=0.0D0
-                r_part(indx) = 1000000.D0
-             end if
-!          !print *, Qr,Jr
-             indx = indx+1
-          end do
-        end do 
+      !$OMP PARALLEL DO SCHEDULE(GUIDED)
+      do indx=1,Npart
+         if (f(indx)<= cutoff*f_max) then
+            f(indx)=0.0D0
+            r_part(indx) = 1000000.D0
+         end if
       end do
- 
+      !$OMP END PARALLEL DO
+
+
       call reduce_arrays
 
 
