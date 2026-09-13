@@ -113,6 +113,30 @@ avanza.
   `poisson_ps` referencia un módulo `chebyshev` inexistente. Mover a
   `legacy/` o borrar.
 
+## Mejoras de rendimiento
+
+- [x] **`density()`/`avg_density()`/`poisson_rk()`: búsqueda de vecinos
+  por fuerza bruta `O(Nr×Npart)`.** Reemplazada por una lista de
+  celdas (`build_cell_list` en `utils.f90`, `O(Nr+Npart)`). Validado
+  bit a bit contra la versión sin optimizar en 3 escenarios (incluido
+  autogravitante). Benchmark autogravitante completo
+  (`input_parameters`, 17084 partículas, 100000 pasos,
+  `autointeraction=.true.`): main 4 hilos = 2467.0s vs fix 1 hilo =
+  849.5s (**2.90× más rápido con ¼ de los hilos**). Energía y
+  diagnósticos finales coinciden a varias cifras significativas;
+  diferencias por partícula (~10⁻⁶ mediana) consistentes con caos
+  numérico, no con un bug. — commit `perf(density): replace
+  O(Nr*Npart) brute-force deposit/interpolation with a cell list`.
+  Nota: con la optimización, más hilos ya no ayuda claramente a
+  Npart moderado (ver el commit) — posible trabajo futuro: paralelizar
+  `build_cell_list` o reusar sus buffers entre llamadas.
+- [ ] **`avg_density()` corre cada paso en modo autogravitante**
+  (vía `grav_force()→poisson_rk()`), no solo cada `spatial_output`
+  como `density()`. No es un bug — es inherente al método de campo
+  autoconsistente — pero sigue siendo el costo dominante en corridas
+  autogravitantes largas. Ya mitigado en gran parte por el punto
+  anterior; posible mejora futura si se necesita más velocidad.
+
 ## Mejoras de diseño (no son bugs)
 
 - [ ] `test_consistency` (`utils.f90`) nunca se llama desde `main.f90`
