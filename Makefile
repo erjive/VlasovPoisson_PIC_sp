@@ -67,7 +67,7 @@ endif
 
 ifeq ($(FC),gfortran)
 
-#FLAGS := -O3 -ffree-form -Jobjs -funroll-loops -fopenmp -w  -Wall#-fallow-argument-mismatch
+FLAGS := -O3 -ffree-form -Jobjs -funroll-loops -fopenmp -fallow-argument-mismatch -w -Wall
 #FLAGS := -O3 -Wall -I. -Wno-unused-dummy-argument -fopenmp
 #FLAGS := -Ofast -ffast-math -ftree-vectorize -funroll-loops -fopenmp
 #FLAGS := -O2 -fimplicit-none  -Wall  -Wline-truncation  -Wcharacter-truncation  -Wsurprising  -Waliasing  -Wimplicit-interface  -Wunused-parameter  -fwhole-file  -fcheck=all  -std=f2008  -pedantic  -fbacktrace
