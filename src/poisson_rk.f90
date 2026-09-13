@@ -41,6 +41,8 @@
   real(8) spot,sdev_pot
   real(8) poth,dev_poth
   real(8) rho0,pi
+  real(8) cutoff_interp
+  integer :: Wgrid,jc,jlo,jhi
   character(100) :: filename
 
 ! *******************
@@ -148,6 +150,15 @@
   pot_part   = 0.0D0
   force_part = 0.0D0
 
+! Since the grid r(1:Nr) is uniform with spacing dr and already
+! indexed in order (r(k) = r(1) + (k-1)*dr for both grid conventions
+! in construct_grid), we don't need a cell list here as in
+! density()/avg_density(): for each particle we can find the small
+! range of nearby grid indices directly by inverting that formula,
+! instead of scanning all Nr grid points.  This turns the
+! O(Npart*Nr) brute-force search into ~O(Npart).  The exact distance
+! check below is unchanged, so this is a pure performance change.
+!
 ! NOTE: parallelize only over "i" (not collapse(2) over i and j).
 ! pot_part(i)/force_part(i) are accumulated across all j for a given
 ! i, so collapsing i and j lets different threads update the same i
@@ -155,11 +166,20 @@
 ! Keeping the parallel loop over i alone means each i is owned by
 ! exactly one thread for the whole inner j loop, which is race-free
 ! without needing atomics.
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j)
+
+  cutoff_interp = (dble(bsplineorder)+1.0d0)*dr
+  Wgrid = ceiling(cutoff_interp/dr) + 1
+
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,jc,jlo,jhi)
 
   do i=1,Npart
-    do j=1,Nr
-      if (abs(r_part(i)-r(j))<=(bsplineorder+1)*dr) then
+
+    jc  = nint((r_part(i)-r(1))/dr) + 1
+    jlo = max(1,jc-Wgrid)
+    jhi = min(Nr,jc+Wgrid)
+
+    do j=jlo,jhi
+      if (abs(r_part(i)-r(j))<=cutoff_interp) then
 
         pot_part(i)   = pot_part(i) + pot(j)*Wn(bsplineorder,(r_part(i)-r(j))/dr)
 

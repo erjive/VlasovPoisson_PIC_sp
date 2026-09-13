@@ -31,6 +31,9 @@ subroutine density
 
   integer i,j
   real(8) :: smallpi,factor,average_rho,mass
+  real(8) :: cutoff_rho,cutoff_avg
+  integer :: Wcell,c,clo,chi,pp
+  integer, allocatable :: cell_start(:),particle_order(:)
 
   character(20) filename ! Name of outupt file.
 
@@ -54,6 +57,20 @@ subroutine density
   avg_rho = 0.D0
   curr = 0.D0
 
+! Build a cell list once (O(Nr+Npart)) so the deposit loop below only
+! scans particles in grid cells near "i" instead of all Npart
+! particles: the B-spline shape/weight functions have compact
+! support (a few cells wide), so the brute-force O(Nr*Npart) search
+! over every (i,j) pair was doing mostly wasted work.  See
+! build_cell_list in utils.f90 for details; the exact distance
+! checks below are unchanged, so this is a pure performance change.
+
+  call build_cell_list(cell_start,particle_order)
+
+  cutoff_rho = dble(bsplineorder)*drc
+  cutoff_avg = dble(bsplineorder)*dr
+  Wcell = ceiling(max(cutoff_rho,cutoff_avg)/dr) + 1
+
 ! NOTE: parallelize only over "i" (not collapse(2) over i and j).
 ! rho(i)/curr(i)/avg_rho(i) are accumulated across all j for a given
 ! i, so collapsing i and j together lets different threads update
@@ -61,25 +78,35 @@ subroutine density
 ! data race.  Keeping the parallel loop over i alone means each i is
 ! owned by exactly one thread for the whole inner j loop, which is
 ! race-free without needing atomics.
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j)
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(c,clo,chi,pp,j)
 
   do i=1,Nr
-    do j=1,Npart
-      if (abs(r(i)-r_part(j))<=(bsplineorder)*drc) then
 
-        rho(i) = rho(i) + f(j)*l_part(j)*Sn(bsplineorder,(r(i)-r_part(j))/drc,drc)
-        curr(i) = curr(i)+f(j)*l_part(j)*p_part(j)*Sn(bsplineorder,(r(i)-r_part(j))/drc,drc)
-      end if
+    clo = max(1,i-Wcell)
+    chi = min(Nr,i+Wcell)
 
-      if (abs(r(i)-r_part(j))<=(bsplineorder)*dr) then
+    do c=clo,chi
+      do pp=cell_start(c),cell_start(c+1)-1
+        j = particle_order(pp)
 
-        avg_rho(i) = avg_rho(i) + f(j)/(dr+dr**3/(12.d0*r(i)**2))*l_part(j)*Wn(bsplineorder,(r(i)-r_part(j))/dr)
+        if (abs(r(i)-r_part(j))<=cutoff_rho) then
 
-      end if
+          rho(i) = rho(i) + f(j)*l_part(j)*Sn(bsplineorder,(r(i)-r_part(j))/drc,drc)
+          curr(i) = curr(i)+f(j)*l_part(j)*p_part(j)*Sn(bsplineorder,(r(i)-r_part(j))/drc,drc)
+        end if
 
+        if (abs(r(i)-r_part(j))<=cutoff_avg) then
+
+          avg_rho(i) = avg_rho(i) + f(j)/(dr+dr**3/(12.d0*r(i)**2))*l_part(j)*Wn(bsplineorder,(r(i)-r_part(j))/dr)
+
+        end if
+
+      end do
     end do
   end do
   !$OMP END PARALLEL DO
+
+  deallocate(cell_start,particle_order)
 
 ! Ghost points using the reflection symmetry f(r,p) = f(-r,-p),
 ! which for scalars integrated over p (rho, avg_rho) is even:
@@ -161,6 +188,9 @@ subroutine avg_density
 
   integer i,j
   real(8) :: smallpi,factor,diff,contribution
+  real(8) :: cutoff_avg
+  integer :: Wcell,c,clo,chi,pp
+  integer, allocatable :: cell_start(:),particle_order(:)
 
   smallpi = acos(-1.0d0)
 
@@ -175,40 +205,48 @@ subroutine avg_density
 
      factor = 2.0*smallpi*drc*dpc*dlc
 
-!  endif  
+!  endif
 
   avg_rho = 0.D0
 
-  !!$OMP PARALLEL DO SCHEDULE(GUIDED) private (j) collapse(2)
-!!$OMP PARALLEL DO SCHEDULE(GUIDED) collapse(2)
+! Cell list (see build_cell_list in utils.f90 and the matching note
+! in subroutine density above): avoids scanning all Npart particles
+! for every grid point.  This subroutine is called from poisson_rk
+! on EVERY time step when autointeraction=.true. (not just every
+! spatial_output like density()), so it is the single most
+! performance-sensitive loop in the self-gravitating case.
 
-!  do i=1,Nr
-!    do j=1,Npart
-!      if (abs(r(i)-r_part(j))<=(bsplineorder+1)*drc) then
+  call build_cell_list(cell_start,particle_order)
 
+  cutoff_avg = (dble(bsplineorder) + 1.0d0)*dr
+  Wcell = ceiling(cutoff_avg/dr) + 1
 
-!        avg_rho(i) = avg_rho(i) + f(j)/drc*Wn(bsplineorder,(r(i)-r_part(j))/drc)
+! Parallelizing only over "i" (no collapse) means each i is owned by
+! exactly one thread for its whole inner loop, so the accumulation
+! into avg_rho(i) is race-free without needing !$OMP ATOMIC.
 
-
-!      end if
-!    end do
-!  end do
-!  !$OMP END PARALLEL DO
-
-!  !$OMP PARALLEL DO 
-!$OMP PARALLEL DO SCHEDULE(GUIDED) SHARED(avg_rho, r, r_part, f, bsplineorder, drc) PRIVATE(i, j, diff, contribution)
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(c,clo,chi,pp,j,diff,contribution)
 
   do i = 1, Nr
-    do j = 1, Npart
+
+    clo = max(1,i-Wcell)
+    chi = min(Nr,i+Wcell)
+
+    do c=clo,chi
+      do pp=cell_start(c),cell_start(c+1)-1
+        j = particle_order(pp)
+
         diff = abs(r(i) - r_part(j))
-        if (diff <= (bsplineorder + 1) * dr) then
+        if (diff <= cutoff_avg) then
             contribution = f(j) / (r(i)**2*dr+dr**3/12.d0) *l_part(j)* Wn(bsplineorder, diff / dr)
-           !$OMP ATOMIC
             avg_rho(i) = avg_rho(i) + contribution
         end if
+      end do
     end do
   end do
   !$OMP END PARALLEL DO
+
+  deallocate(cell_start,particle_order)
 
 ! Ghost points using the reflection symmetry avg_rho(-r) = avg_rho(r)
 ! (see the matching note in subroutine density above).

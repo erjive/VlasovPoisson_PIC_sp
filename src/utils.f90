@@ -301,6 +301,69 @@ subroutine construct_grid
 
 end subroutine construct_grid
 
+  !> Build a cell list for the current particles.
+  !!
+  !! Groups particle indices (1:Npart) by the radial grid cell
+  !! (spacing dr) nearest their position r_part(j), so that a
+  !! deposit/interpolation loop over grid points i=1,Nr only needs
+  !! to scan particles in a few nearby cells instead of all Npart
+  !! particles -- turning the O(Nr*Npart) brute-force search in
+  !! density(), avg_density() and poisson_rk() into ~O(Nr+Npart).
+  !!
+  !! On output, the particles assigned to grid cell c (1<=c<=Nr) are
+  !! particle_order(cell_start(c):cell_start(c+1)-1). Both arrays
+  !! are allocated here; the caller must deallocate them.
+  !!
+  !! The grid is uniform with spacing dr for both grid conventions
+  !! used in construct_grid (rmin>0 and the staggered rmin=0 case),
+  !! so r(k) = r(1) + (k-1)*dr always holds, and the nearest grid
+  !! index to a position x is nint((x-r(1))/dr) + 1, independent of
+  !! which convention built the grid.  Particles that fall outside
+  !! the physical range (e.g. already flagged/removed with a huge
+  !! r_part, or otherwise beyond r(1):r(Nr)) are clamped into the
+  !! boundary cell: harmless, since the caller still applies the
+  !! exact distance cutoff and will simply reject them.
+  subroutine build_cell_list(cell_start,particle_order)
+
+    implicit none
+
+    integer, allocatable, intent(out) :: cell_start(:)
+    integer, allocatable, intent(out) :: particle_order(:)
+
+    integer :: j,c
+    integer, allocatable :: cell_count(:),cursor(:),ic(:)
+
+    allocate(cell_start(1:Nr+1))
+    allocate(particle_order(1:Npart))
+    allocate(cell_count(1:Nr))
+    allocate(cursor(1:Nr))
+    allocate(ic(1:Npart))
+
+    cell_count = 0
+
+    do j=1,Npart
+      ic(j) = nint((r_part(j)-r(1))/dr) + 1
+      ic(j) = max(1,min(Nr,ic(j)))
+      cell_count(ic(j)) = cell_count(ic(j)) + 1
+    end do
+
+    cell_start(1) = 1
+    do c=1,Nr
+      cell_start(c+1) = cell_start(c) + cell_count(c)
+    end do
+
+    cursor(1:Nr) = cell_start(1:Nr)
+
+    do j=1,Npart
+      c = ic(j)
+      particle_order(cursor(c)) = j
+      cursor(c) = cursor(c) + 1
+    end do
+
+    deallocate(cell_count,cursor,ic)
+
+  end subroutine build_cell_list
+
   !> Set the time step.
   !! Here we find the time step using information from the
   !! Courant factor, the maximum value of the momentum, and
