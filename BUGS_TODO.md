@@ -33,18 +33,21 @@ avanza.
   RK justo en el origen). — commit `fix(density): correct ghost-zone
   mirroring in density/avg_density`
 
+## Resueltos (cont.)
+
+- [x] **`save1Ddata` recibía arreglos con ghost cells en un argumento
+  mudo de forma explícita más chico (`dimension(1:Nr)`).** Por
+  asociación de secuencia de Fortran, el arreglo recibido quedaba
+  corrido `ghost` posiciones: los `.rl` de salida (`vlasov_density`,
+  `vlasov_avg_density`, `vlasov_curr`, y si `autointeraction`,
+  `vlasov_force`/`vlasov_potential`) incluían al principio los puntos
+  fantasma (r negativo) y perdían los últimos `ghost` puntos físicos
+  reales cerca de `r=rmax`. Arreglado limitando cada llamada al rango
+  físico `(1:Nr)` en `utils.f90`. — commit `fix(io): correct index
+  shift when saving ghost-augmented grid arrays`
+
 ## Pendientes
 
-- [ ] **`save1Ddata` recibe arreglos con ghost cells en un argumento
-  mudo de forma explícita más chico (`dimension(1:Nr)`).** Por
-  asociación de secuencia de Fortran, el arreglo recibido queda corrido
-  `ghost` posiciones: los `.rl` de salida (`vlasov_density`,
-  `vlasov_avg_density`, `vlasov_curr`, y si `autointeraction`,
-  `vlasov_force`/`vlasov_potential`) incluyen al principio los puntos
-  fantasma (r negativo) y pierden los últimos `ghost` puntos físicos
-  reales cerca de `r=rmax`. No afecta la física de la simulación, sí
-  los datos de diagnóstico/gráficas. Afecta las llamadas en
-  `utils.f90` dentro de `save_data`.
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
   `sphere`** sin `abs()` — cualquier partícula con `r_part` negativo
   transitorio (antes de la reflexión de simetría al final de cada
