@@ -47,7 +47,8 @@
             eta = dacos(-sign(min(abs(argaux(i)),1.0),argaux(i)))+smallpi
           end if
 
-          Qr(i) = eta - sqrt((-2.d0*energy(i))**3)*sqrt(-l_part(i)**2-2.d0*energy(i)-2.d0-0.5D0/energy(i))/(-2.d0*energy(i))*sin(eta)
+          Qr(i) = eta - sqrt((-2.d0*energy(i))**3) &
+                  *sqrt(-l_part(i)**2-2.d0*energy(i)-2.d0-0.5D0/energy(i))/(-2.d0*energy(i))*sin(eta)
     end do
     ii = (0.d0,1.d0)
     exp_vals = exp(-ii*Qr)
