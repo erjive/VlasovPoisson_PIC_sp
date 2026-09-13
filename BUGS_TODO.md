@@ -85,6 +85,24 @@ avanza.
   `.true.`/`.false.`): terminan limpio con "Memory deallocated". —
   commit `fix(memory): repair deallocate_mem and actually call it`
 
+## Resueltos (cont. 5)
+
+- [x] **`functions.f90` `Sn`/`Wn` no rechazaban ningún orden inválido
+  salvo `n` mayor al máximo** (`else if (n>4)`/`else if (n>3)`, no
+  `else`): con `n<1` ninguna rama coincidía y se usaba el valor de
+  retorno sin inicializar. Cambiado a un `else` genérico que atrapa
+  cualquier orden inválido, y corregido de paso el mensaje de error
+  de `Wn` (decía "greater than 4" cuando la condición real era
+  `n>3`). Verificado con `bsplineorder=5` (sí alcanzable en la
+  práctica): aborta limpio con el mensaje correcto. Nota: `n<1`
+  resultó no ser alcanzable por ningún sitio de llamada actual (los
+  6 están todos protegidos por `abs(distancia)<=cutoff`, y con
+  `bsplineorder<=0` ese cutoff ya es `<=0`), así que no pude
+  reproducirlo como fallo real — el arreglo queda como
+  endurecimiento de robustez para cualquier llamada futura directa.
+  — commit `fix(functions): Sn/Wn now reject any invalid order, not
+  just n>4/n>3`
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
@@ -109,9 +127,6 @@ avanza.
   y el booleano independiente `autointeraction`. Con
   `forcetype="self"` y `autointeraction=.false.` las partículas no
   sienten fuerza radial (documentación/código desincronizados).
-- [ ] **`functions.f90` `Sn`/`Wn` no validan `n<1`** (p. ej.
-  `bsplineorder=0` o negativo): ninguna rama coincide y se usa la
-  variable de retorno sin inicializar.
 - [ ] **Carpeta `src/`: archivos legado sin extensión `.f90`**
   (`analysish`, `poisson`, `poisson_ps`, `reduce_arrays`) no se
   compilan, están desincronizados de sus homónimos activos, y
