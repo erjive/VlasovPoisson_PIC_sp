@@ -292,14 +292,26 @@ program VP_PIC
 !    ***   ADAPT TIME STEP   ***
 !    ***************************
 
-!    For the self-gravitating case the force can change
-!    with time, so one needs to adapt the time step.
-!    Notice that the time step can go up and down in
-!    response to the size of the force.
+!    For the self-gravitating case the force can change with time
+!    (e.g. it grows as the cloud collapses, see the "compactness"
+!    runs in the article), so the time step needs to adapt -- it was
+!    otherwise only ever computed once, from the *initial* force,
+!    before the main loop even starts.  Notice that the time step can
+!    go up and down in response to the size of the force.  This uses
+!    force_part right after grav_force() was called for the new
+!    r_part above, so Fmax reflects the force at the position the
+!    particles were just moved to, and the resulting dt is the one
+!    used to advance the *next* step.
+!
+!    This was originally guarded by forcetype=="self", but forcetype
+!    never actually gets set to "self" anywhere meaningful (see the
+!    "forcetype=self is a no-op" item in BUGS_TODO.md) -- the flag
+!    that actually controls whether the force can change over time is
+!    autointeraction.
 
-     !if (forcetype=="self") then
-     !  call set_timestep()
-     !end if
+     if (autointeraction) then
+       call set_timestep()
+     end if
 
 
 !    *****************************

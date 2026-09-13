@@ -430,7 +430,14 @@ end subroutine construct_grid
 ! the previous criterion when Fmax is large, since it scales
 ! as 1/sqrt(Fmax) instead of 1/Fmax.
 
-  if (BGtype /= "null") then
+! Force can be nonzero from a fixed background (BGtype/="null") *or*
+! from self-gravity (autointeraction) -- gating this solely on BGtype
+! (as before) silently skipped the force-based criterion whenever
+! BGtype=="null", even with autointeraction=.true., leaving dt fixed
+! at the plain CFL value dtr regardless of how large the self-gravity
+! force actually got.
+
+  if (BGtype /= "null" .or. autointeraction) then
     Fmax = 0.0d0
 
     do i=1,Npart
