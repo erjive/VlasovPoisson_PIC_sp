@@ -46,6 +46,15 @@ avanza.
   físico `(1:Nr)` en `utils.f90`. — commit `fix(io): correct index
   shift when saving ghost-augmented grid arrays`
 
+## Resueltos (cont. 2)
+
+- [x] **`utils.f90` `reduce_arrays`: operadores de comparación
+  inconsistentes** entre el conteo (`r_part(i)<=rmax`) y la copia
+  (`r_aux(i)<rmax`) — una partícula justo en `r=rmax` dejaba una
+  entrada sin inicializar en los arreglos reasignados. Arreglado
+  usando `<=rmax` en ambos lados. — commit `fix(reduce_arrays): use
+  consistent <=rmax in count and copy loops`
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
