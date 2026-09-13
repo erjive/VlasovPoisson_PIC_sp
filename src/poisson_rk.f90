@@ -148,7 +148,14 @@
   pot_part   = 0.0D0
   force_part = 0.0D0
 
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) collapse(2)
+! NOTE: parallelize only over "i" (not collapse(2) over i and j).
+! pot_part(i)/force_part(i) are accumulated across all j for a given
+! i, so collapsing i and j lets different threads update the same i
+! concurrently with no atomic/reduction protection -- a data race.
+! Keeping the parallel loop over i alone means each i is owned by
+! exactly one thread for the whole inner j loop, which is race-free
+! without needing atomics.
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j)
 
   do i=1,Npart
     do j=1,Nr
