@@ -253,11 +253,20 @@ avanza.
   caso autogravitante bien resuelto (partículas lejos de `r=0`: sin
   cambio, 1.85% en ambos). — commit `feat(timestep): adapt dt
   periodically during self-gravitating runs`
-- [ ] Paralelizar la generación de partículas iniciales en
-  `initial_data.f90` (estados `aa`/`gaussian1`) — el `!$OMP` ya está
-  escrito pero deshabilitado por la dependencia secuencial del índice
-  `indx`; se resuelve calculándolo con una fórmula cerrada. Medido en
-  ~1-2s para 2M candidatos hoy, así que no es urgente.
+- [x] **Paralelizar la generación de partículas iniciales** en
+  `initial_data.f90` (estados `aa`/`gaussian1`) — el índice `indx` se
+  incrementaba a mano (dependencia secuencial que bloqueaba el
+  `!!$OMP` ya escrito pero deshabilitado); reemplazado por la fórmula
+  cerrada `indx=(k-1)*Nrc*Npc+(i-1)*Npc+j`, que hace que cada hilo
+  escriba solo en su propio índice (a diferencia del bug de
+  `collapse(2)` en `density()`, acá no hay accumulation compartida,
+  es un scatter puro — seguro de colapsar del todo). Validado:
+  datos idénticos bit a bit contra la versión serial (gaussian1 y aa),
+  y determinístico entre 1/4/8 hilos. A escala de producción (2M
+  candidatos, estado `aa`): **~1.7× más rápido** (0.53s→0.31-0.32s,
+  con retornos decrecientes más allá de los 4 núcleos físicos, como
+  se esperaba). — commit `perf(initial_data): parallelize gaussian1/aa
+  candidate generation`
 - [ ] Cachear la evaluación de `Sn(...)` en `density()` — se calcula
   dos veces con los mismos argumentos (una para `rho`, otra para
   `curr`) en el bucle más caliente del código.
