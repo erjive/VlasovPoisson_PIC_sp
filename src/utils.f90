@@ -372,12 +372,21 @@ end subroutine construct_grid
     call save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,l_part*f)
 
 !   Save rho, curr and cont (multiplied by r**2).
+!
+!   NOTE: r, rho, avg_rho and curr are allocated with ghost points
+!   (bounds 1-ghost:Nr, see alloc_mem_set0), but save1Ddata's dummy
+!   arguments are explicit-shape (1:Nr).  Passing the whole arrays (or
+!   an expression built from them) here associates them by sequence,
+!   silently shifting the data by "ghost" points: the output would
+!   start with the unphysical ghost points and drop the last "ghost"
+!   physical points near r=rmax.  Slicing to (1:Nr) selects exactly
+!   the physical points and matches the dummy's shape.
     filename = 'vlasov_density'
-    call save1Ddata(directory,filename,Nr,t,r,r**2*rho)
+    call save1Ddata(directory,filename,Nr,t,r(1:Nr),r(1:Nr)**2*rho(1:Nr))
     filename = 'vlasov_avg_density'
-    call save1Ddata(directory,filename,Nr,t,r,r**2*avg_rho)
+    call save1Ddata(directory,filename,Nr,t,r(1:Nr),r(1:Nr)**2*avg_rho(1:Nr))
     filename = 'vlasov_curr'
-    call save1Ddata(directory,filename,Nr,t,r,r**2*curr)
+    call save1Ddata(directory,filename,Nr,t,r(1:Nr),r(1:Nr)**2*curr(1:Nr))
     filename = 'vlasov_energy'
     call save0Ddata(directory,filename,t,total_energy)
     filename = 'vlasov_k_phi_e'
@@ -390,10 +399,10 @@ end subroutine construct_grid
     if (autointeraction) then
 
        filename = 'vlasov_force'
-       call save1Ddata(directory,filename,Nr,t,r,force)
+       call save1Ddata(directory,filename,Nr,t,r(1:Nr),force(1:Nr))
 
        filename = 'vlasov_potential'
-       call save1Ddata(directory,filename,Nr,t,r,pot)
+       call save1Ddata(directory,filename,Nr,t,r(1:Nr),pot(1:Nr))
 
        filename = 'vlasov_potential_r0'
        call save0Ddata(directory,filename,t,pot(1))
