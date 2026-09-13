@@ -181,8 +181,64 @@ avanza.
   autoconsistente — pero sigue siendo el costo dominante en corridas
   autogravitantes largas. Ya mitigado en gran parte por el punto
   anterior; posible mejora futura si se necesita más velocidad.
+- [x] **Output en ASCII de texto plano, pesado y lento de escribir**
+  (`vlasov_fdist.2D` llegó a 838 MB en una corrida de 100 000 pasos).
+  Agregado output HDF5 opcional (`output_format="hdf5"`), un archivo
+  `.h5` por corrida, un grupo por snapshot, comprimido con gzip.
+  Validado bit a bit contra ASCII en 2 escalas. A escala realista
+  (50 000 partículas, 21 snapshots): **34% más rápido, 62% más chico**.
+  Rama `feature/hdf5-output`, commit `feat(io): add optional HDF5
+  output, selected via output_format parameter`. `hk.tl` y
+  `vlasov_rhomix.tl` se quedaron en ASCII (fuera de alcance, chicos).
+- [ ] **Reusar los buffers de `build_cell_list` en vez de
+  reservarlos/liberarlos en cada llamada** — hoy hace `allocate`/
+  `deallocate` de 4 arreglos de tamaño `Npart` en cada llamada a
+  `density()`/`avg_density()`, y en modo autogravitante eso es cada
+  paso (hasta ~1.28M veces en una corrida a $t=10000$). Reservar una
+  vez a nivel de módulo y solo re-dimensionar cuando cambie `Npart`
+  (tras `reduce_arrays`).
+- [ ] **Integrador simpléctico de orden superior** (Yoshida/Forest-Ruth
+  de 4º orden, compuesto de leapfrog) — permitiría un `dt` más grande
+  para el mismo error de conservación de energía. Como el costo total
+  escala directo con `Nt`, es la mejora con mayor apalancamiento
+  potencial sobre el tiempo total de una corrida larga.
+- [ ] **`set_timestep` solo se llama una vez, antes del bucle principal**
+  — en modo autogravitante `Fmax` puede crecer si el sistema colapsa
+  (justo lo que se ve en la sección "compactness" del artículo).
+  Reevaluarlo periódicamente corrige un problema de precisión/
+  estabilidad potencial y puede acelerar las fases tempranas de baja
+  fuerza.
+- [ ] Paralelizar la generación de partículas iniciales en
+  `initial_data.f90` (estados `aa`/`gaussian1`) — el `!$OMP` ya está
+  escrito pero deshabilitado por la dependencia secuencial del índice
+  `indx`; se resuelve calculándolo con una fórmula cerrada. Medido en
+  ~1-2s para 2M candidatos hoy, así que no es urgente.
+- [ ] Cachear la evaluación de `Sn(...)` en `density()` — se calcula
+  dos veces con los mismos argumentos (una para `rho`, otra para
+  `curr`) en el bucle más caliente del código.
+- [ ] Flags de compilación más agresivas (`-march=native`, `-flto`);
+  `-ffast-math` con cautela — necesitaría la misma validación
+  bit-a-bit que se le hizo a la lista de celdas.
+- [ ] Evitar copiar arreglos completos cada paso (`r_part_p=r_part`,
+  `p_part_p=p_part` en `main.f90`) con un esquema ping-pong de índices
+  en vez de copia.
+- [ ] Vectorizar/agrupar la cuadratura de `phik` en `analysish.f90`
+  (hoy hace Simpson de 21 puntos por partícula y por modo, con
+  llamadas a función una por una).
 
 ## Mejoras de diseño (no son bugs)
+
+- [ ] **Forma más amigable de pasar los parámetros de la simulación.**
+  Hoy `read_initial_param` (`utils.f90`) lee `input_parameters` de
+  forma puramente posicional (`read(*,*) x` sin nombres) — agregar,
+  quitar o reordenar un parámetro rompe silenciosamente cualquier
+  archivo de entrada existente que no se actualice a la par (ya nos
+  pasó al agregar `output_format`: cualquier `input_parameters` viejo
+  deja de funcionar hasta agregarle la línea nueva al final). Un
+  formato con claves (namelist de Fortran, TOML, YAML, o JSON) sería
+  mucho más robusto y auto-documentado, y permitiría detectar
+  parámetros faltantes/mal escritos con un mensaje claro en vez de
+  un `read` que falla de forma críptica o lee el valor equivocado.
 
 - [ ] `test_consistency` (`utils.f90`) nunca se llama desde `main.f90`
   y referencia `lmin`/`lmax` que no existen (son `lminc`/`lmaxc`) — no

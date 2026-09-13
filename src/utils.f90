@@ -48,6 +48,16 @@ module utils
     read(*,*) forcetype
     read(*,*) BGtype
     read(*,*) autointeraction
+    read(*,*) output_format
+
+    if (output_format/="ascii" .and. output_format/="hdf5") then
+       print *
+       print *, 'Unknown output_format: ',trim(output_format)
+       print *, 'Valid values are "ascii" or "hdf5".'
+       print *, 'Aborting ...'
+       print *
+       stop
+    end if
 
   end subroutine read_initial_param
 

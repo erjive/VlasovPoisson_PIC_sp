@@ -74,6 +74,7 @@ module parameters
 
    !Output
    character(20)  :: directory = "test"     !< Output directory
+   character(20)  :: output_format = "ascii" !< Output format (ascii,hdf5)
    logical        :: reduceparticles = .false. !< Do we discard particles outside the domain? 
    integer        :: Nreduce = 100000       !< How often do we do discard particles outside domain?
    integer        :: spatial_output = 10000 !< Spatial output

@@ -105,10 +105,22 @@ endif
 FF := $(FC)
 
 
+# HDF5 (Fortran bindings, serial build).  Paths as reported by
+# "h5fc -show" on Ubuntu/Debian with libhdf5-dev + libhdf5-fortran
+# installed.  HDF5_INC is needed at compile time (module file
+# hdf5.mod); HDF5_LIBS only at link time.  The rpath bakes the
+# non-standard library location into the executable so it runs
+# without needing LD_LIBRARY_PATH set.
+
+HDF5_INC  := -I/usr/include/hdf5/serial
+HDF5_LIBS := -L/usr/lib/x86_64-linux-gnu/hdf5/serial -Wl,-rpath,/usr/lib/x86_64-linux-gnu/hdf5/serial \
+             -lhdf5hl_fortran -lhdf5_hl -lhdf5_fortran -lhdf5
+
+
 # Object files corresponding to Fortran modules. I separate
 # them from the rest to be sure they are compiled first.
 
-MODS = parameters.o arrays.o utils.o functions.o
+MODS = parameters.o arrays.o utils.o functions.o hdf5_io.o
 
 
 # This line automatically looks for all f90 files in
@@ -134,7 +146,7 @@ OBJS := $(filter-out $(MODS),$(sort $(OBJS)))
 
 %.o : %.f90
 	@ echo "COMPILING FILE: $(notdir $<)"
-	@ $(FF) $(FLAGS) -I objs -c $< -o objs/$@
+	@ $(FF) $(FLAGS) $(HDF5_INC) -I objs -c $< -o objs/$@
 	@ echo
 
 # By default, do nothing for targets for which no rule is specified.
@@ -188,7 +200,7 @@ VP_PIC : $(OBJS)
 	@ echo "LINKING ..."
 	@ echo
 	@ echo
-	cd objs; $(FF) $(FLAGS) $(MODS) $(OBJS) -o ../exe/VP_PIC
+	cd objs; $(FF) $(FLAGS) $(MODS) $(OBJS) $(HDF5_LIBS) -o ../exe/VP_PIC
 	@ echo
 	@ echo
 	@ echo  "COMPILATION DONE!"

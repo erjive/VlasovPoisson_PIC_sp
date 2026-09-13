@@ -31,5 +31,6 @@ leapfrog ! Integrator
 two      ! Spatial order discretization
 bg       ! Forcetype 
 Isochrone ! Background type
-.false.    ! Autointeraction 
+.false.    ! Autointeraction
+ascii    ! Output format (ascii,hdf5)
 
