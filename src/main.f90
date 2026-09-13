@@ -18,6 +18,19 @@ program VP_PIC
 
   integer i,j,k,l       ! Counters
 
+! Coefficients for the 4th-order symplectic integrator "yoshida4"
+! (Yoshida, Phys. Lett. A 150, 262 (1990)): composes three
+! leapfrog-like drift/kick sub-steps, with weights chosen so that the
+! dt^3 local error term of a single 2nd-order (leapfrog) step cancels
+! between them, leaving a dt^5 local (dt^4 global) error instead.
+
+  real(8), parameter :: yg_cbrt2 = 1.2599210498948732d0            ! 2**(1/3)
+  real(8), parameter :: yg_w1    = 1.d0/(2.d0-yg_cbrt2)
+  real(8), parameter :: yg_w0    = -yg_cbrt2/(2.d0-yg_cbrt2)
+  real(8), parameter :: yg_c1 = yg_w1*0.5d0,      yg_c4 = yg_c1     ! drift weights
+  real(8), parameter :: yg_c2 = (yg_w0+yg_w1)*0.5d0, yg_c3 = yg_c2
+  real(8), parameter :: yg_d1 = yg_w1,  yg_d2 = yg_w0,  yg_d3 = yg_w1 ! kick weights
+
 
   call read_initial_param()
 
@@ -137,6 +150,32 @@ program VP_PIC
       call  grav_force()
 
       p_part   = p_part_h + force_part*dt*0.5D0
+
+!   Fourth order symplectic integrator (Yoshida 1990), composed of
+!   three leapfrog-like drift-kick sub-steps -- see the coefficient
+!   definitions near the top of this program.  Costs 4 force
+!   evaluations per step (vs 1 for leapfrog: 3 for the sub-steps,
+!   plus one more after the final drift so that force_part stays
+!   synced with r_part on exit, matching what euler/leapfrog leave
+!   behind), but should tolerate a larger dt for the same
+!   energy-conservation accuracy.
+
+    else if (integrator == 'yoshida4') then
+
+      r_part = r_part_p + yg_c1*dt*p_part_p
+      call grav_force()
+      p_part = p_part_p + yg_d1*dt*force_part
+
+      r_part = r_part + yg_c2*dt*p_part
+      call grav_force()
+      p_part = p_part + yg_d2*dt*force_part
+
+      r_part = r_part + yg_c3*dt*p_part
+      call grav_force()
+      p_part = p_part + yg_d3*dt*force_part
+
+      r_part = r_part + yg_c4*dt*p_part
+      call grav_force()
 
 !    Fourth order Runge-Kutta.
 
