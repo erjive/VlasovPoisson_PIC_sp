@@ -183,7 +183,19 @@ module utils
 
 ! Coordinates, force and potential.
 
-  allocate(r(1-ghost:Nr))
+! construct_grid fills r(i) for i=0,Nr when rmin>0 (ghost=0), but for
+! i=1-ghost,Nr when rmin=0 (ghost=2 or 3) -- the rmin>0 case still
+! writes index 0, one element below the "1-ghost=1" lower bound that
+! formula alone would give, so allocate the wider of the two ranges
+! explicitly instead of just "r(1-ghost:Nr)" (an out-of-bounds write
+! to r(0) for rmin>0, silently corrupting the heap until something
+! else's deallocate happens to detect it).
+
+  if (rmin>0.d0) then
+     allocate(r(0:Nr))
+  else
+     allocate(r(1-ghost:Nr))
+  end if
   r = 0.0d0
 
   if (autointeraction) then
