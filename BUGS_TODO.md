@@ -143,6 +143,39 @@ avanza.
   fuerza cerca de la singularidad. Activar `eps` (o exponerlo como
   parámetro configurable) podría mejorar sustancialmente la
   estabilidad de corridas con partículas de bajo momento angular.
+  **Confirmado como regresión real** comparando contra código
+  histórico rescatado por el usuario
+  (`/home/erik/Documentos/old_VlasovPoisson_PIC_sp/`, versión previa
+  al refactor 2D→3D del estado `aa`): ahí `eps` sí se calculaba y se
+  usaba activamente,
+  ```fortran
+  eps = Lfix/(10.0D0*pmax)                                    ! utils.f90
+  pot_part   = pot_part + 0.5d0*Lfix**2/(r_part**2 + eps*eps)  ! grav_force.f90
+  force_part = force_part + Lfix**2*r_part/(r_part**2+eps*eps)**2
+  ```
+  y también se usaba en `initial_data.f90` para calcular la energía
+  inicial. El suavizado se perdió en algún punto del refactor de
+  `Lfix` (escalar) a `l_part` (arreglo distribuido en la malla
+  `(r,p,l)`) — nadie escribió el equivalente con `l_part`. Pendiente
+  de decidir la forma funcional correcta de `eps` en términos de
+  `l_part`/`pmax` para reintroducirlo.
+- [x] **Investigado y descartado: ¿el corte de la ventana de depósito
+  en `density()` (`bsplineorder*drc`/`bsplineorder*dr`) recorta la
+  cola del B-spline respecto al código histórico
+  (`(bsplineorder+1)*drc`/`dr`)?** No. `functions.f90` (donde viven
+  `Sn`/`Wn`) es idéntico entre el código viejo y `main`/`fix` — el
+  soporte compacto real es $|y|<n/2$ para $S_n$ y $|y|<(n+1)/2$ para
+  $W_n=S_{n+1}$ (leído directamente del código). El corte actual
+  (`n·dr_c` para $S_n$, `n·dr` para $W_n$) sigue siendo **el doble**
+  del radio de soporte real en los 4 órdenes soportados — nunca
+  recorta nada; el `+1` del código viejo solo era margen extra sin
+  necesidad matemática. Verificado con la tabla soporte-vs-corte para
+  $n=1..4$ ($S_n$) y $n=1..3$ ($W_n$). Única nota menor (sin efecto
+  numérico): dentro de `density.f90` el corte de `avg_rho` usa
+  `bsplineorder*dr` mientras que la subrutina separada
+  `avg_density()` todavía usa `(bsplineorder+1)*dr` — inconsistencia
+  de estilo entre dos rutinas que calculan lo mismo, ambos cortes son
+  seguros igual.
 
 ## Mejoras de rendimiento
 
