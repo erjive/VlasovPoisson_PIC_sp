@@ -261,6 +261,28 @@ avanza.
   10.38 → 4.34 s (2.39×). Nota para A7: ese caso de L∈[0,0.02] da un
   error de energía de 1.4e14 (órbitas casi radiales por el origen).
 
+- [x] **Mapa ángulo-acción numérico con L y equilibrio autoconsistente**
+  (MEJORAS A2, D2). `tools/aa_numerico_L.py` (mapa directo e inverso en un
+  potencial isócrono + tabla, L por partícula), `tools/equilibrio_L.py`
+  (F_eq(J,L) con L en la rejilla del código, iterado con Poisson, y
+  condición inicial "r p_r L F" para `checkpoint`) y
+  `tools/hk_numerico.py` (h_k en variables verdaderas desde instantáneas
+  HDF5). Verificado:
+  - mapa sin tabla frente al isócrono analítico, 14556 partículas con
+    L∈[0.1,3]: J a 8.9e-15, Q a ≤2.7e-8 (peor caso órbitas casi
+    circulares, J≈1e-4); inversa con Newton: J a 1.2e-15, Q a 4.8e-9;
+  - equilibrio a0=1e-2, L en 8 nodos de [1.6,2.4]: converge a 1.6e-13 en
+    6 iteraciones; nodos recuperados a 2.8e-16 en J y 1.7e-9 en Q;
+  - con el código (32000 partículas, autogravedad, t=100): Φ del código
+    en t=0 frente al de Python, 1.3e-7 (|Φ_self|≤1.6e-3);
+    max_r|Φ(t)-Φ(0)| 4.1e-7 en equilibrio, 4.3e-5 con eps=0.1 y 9.6e-4
+    con el mismo F en acciones del isócrono (`aa_quad`);
+  - h_k numérico sin autogravedad = h_k del código a ≤4.3e-11; con
+    autogravedad en equilibrio, |h_1|/h_0 = 4.96e-3 constante con el mapa
+    del isócrono (el artefacto de coordenadas) y 2.9e-7 → 1.6e-5 con el
+    numérico; con eps=0.1, 0.04936 en t=0 frente a (a_1/a_0)·eps/2=0.0494
+    esperado (isócrono: 0.0545).
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
