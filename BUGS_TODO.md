@@ -185,6 +185,19 @@ avanza.
   más partículas (t1: 66/91/1575; t2: 160/272/5434) y tarda 10–18 veces
   más. `exe/input_parameters` conserva 0.01 (configuración del artículo).
 
+- [x] **Estado `aa_quad`: cuadratura en (Q,J,L)** (MEJORAS A3). Rejilla de
+  puntos medios en J (`Nrc`, [`jminc`,`jmaxc`], por omisión [0, 6 sr]),
+  Q (`Npc`) y L (`Nlc`), invertida a (r,p_r) con `invert_QJ_to_rp`
+  (`utils.f90`). Verificado: (1) ida y vuelta del mapa en 480 mil puntos
+  (L=0.05, 0.6, 2.4; J hasta 3): Q a ≤4.6e-12, J a ≤6.7e-15; (2) sin
+  autogravedad, yoshida4, dt=0.025, t≤200, N_J=200, N_Q=40, N_L=16:
+  h_k del código frente a la suma discreta exacta sobre los mismos
+  nodos, ≤2.6e-11 (integrador y mapa); suma discreta frente a la
+  integral continua, 2.0e-4, dominado por N_L con orden 2 (5.1e-5 con
+  32, 1.3e-5 con 64; N_J ya convergido en 200) porque C_f está truncada
+  en lminc/lmaxc. Herramienta: `tools/hk_exacto.py`. t1/t2/t3 idénticos
+  bit a bit.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

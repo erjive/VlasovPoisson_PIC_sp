@@ -24,6 +24,8 @@
 !   Auxiliary variables for a distribution function 
 !   that depends on action-angle varialbes
     real(8) :: J3, Q3, w3, s, s1, s2, er1, er2, eta, argaux
+!   Midpoint grid of state aa_quad
+    real(8) :: djc, dqc
 
     smallpi = acos(-1.0d0)
 
@@ -176,6 +178,71 @@
 
       print *, "Initial total mass=", sum(f*l_part)*8.0*smallpi**2*drc*dpc*dlc
 
+
+    else if(state .eq."aa_quad") then
+
+!     Tensor-product quadrature directly in the angle-action variables:
+!     midpoints of a regular grid in J (Nrc cells in [jminc,jmaxc]),
+!     Q (Npc cells in [0,2pi)) and L (Nlc cells in [lminc,lmaxc]), each
+!     node mapped back to (r,p_r) with the isochrone map. No jitter: the
+!     ordered nodes are what makes this a quadrature, whose error in h_k
+!     stays at the level of the integrator, while any displacement leaves
+!     the 1/sqrt(N) Monte Carlo rate (vlasov-poisson_PIC, commit c4df269).
+!
+!     Without self-gravity J and L are conserved and Q = Q0 + omega(J,L) t,
+!     so h_k(t) is a quadrature of an increasingly oscillatory integral.
+!     The grid resolves it while, in each direction,
+!        N_J >~ 4 k Delta_omega_J t_max / 2pi,  N_L >~ 4 k Delta_omega_L t_max / 2pi,
+!     with Delta_omega the spread of omega = 1/(J+c)**3 across the support.
+!     In Q the rule is the periodic trapezoid and converges spectrally.
+!
+!     Since dQ dJ = dr dp_r, every node carries the same weight dQ dJ dL;
+!     the constant is absorbed by the mass normalization below, which uses
+!     drc*dpc*dlc like every diagnostic, so f holds the raw distribution.
+
+      djc = (jmaxc-jminc)/dble(Nrc)
+      dqc = 2.0d0*smallpi/dble(Npc)
+      print *, "aa_quad: (dJ,dQ,dL)=",djc,dqc,dlc
+
+      !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(i,j,k,indx,raux,paux,laux,Q3,J3) COLLAPSE(3)
+      do k=1,Nlc
+        do i=1,Nrc
+          do j=1,Npc
+
+            indx = (k-1)*Nrc*Npc + (i-1)*Npc + j
+
+            J3   = jminc + (dble(i)-0.5d0)*djc
+            Q3   = (dble(j)-0.5d0)*dqc
+            laux = lminc + (dble(k)-0.5d0)*dlc
+
+            call invert_QJ_to_rp(Q3,J3,laux,raux,paux)
+
+            r_part(indx) = raux
+            p_part(indx) = paux
+            l_part(indx) = laux
+            f(indx) = exp(-sin(0.5d0*Q3)**2/sp**2)*exp(-J3**2/sr**2)*J3**2*exp(-(laux-l0)**2/sl**2)
+
+          end do
+        end do
+      end do
+      !$OMP END PARALLEL DO
+
+      f_max = maxval(f)
+
+      !$OMP PARALLEL DO SCHEDULE(GUIDED)
+      do indx=1,Npart
+         if (f(indx)<= cutoff*f_max) then
+            f(indx)=0.0D0
+            r_part(indx) = 1000000.D0
+         end if
+      end do
+      !$OMP END PARALLEL DO
+
+      call reduce_arrays
+
+      f = a0/(8.D0*smallpi**2*drc*dpc*dlc*sum(f*l_part))*f
+
+      print *, "Initial total mass=", sum(f*l_part)*8.0*smallpi**2*drc*dpc*dlc
 
     else
 

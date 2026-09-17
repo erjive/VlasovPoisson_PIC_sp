@@ -32,7 +32,7 @@ module paramfile
   character(16), parameter :: pname(*) = [ character(16) :: &
       'dr', 'Nrc', 'Npc', 'Nlc', 'courant', 'dt_switch', 'Nt',   &
       'rmin', 'rmax', 'rminc', 'rmaxc', 'pminc', 'pmaxc',        &
-      'lminc', 'lmaxc', 'pmax',                                  &
+      'lminc', 'lmaxc', 'jminc', 'jmaxc', 'pmax',                &
       'reduceparticles', 'Nreduce',                              &
       'time_output', 'spatial_output', 'field_output',           &
       'directory', 'output_format',                              &
@@ -181,6 +181,8 @@ module paramfile
     case ('pmaxc')           ; call get_real(value,pmaxc,name,origin)
     case ('lminc')           ; call get_real(value,lminc,name,origin)
     case ('lmaxc')           ; call get_real(value,lmaxc,name,origin)
+    case ('jminc')           ; call get_real(value,jminc,name,origin)
+    case ('jmaxc')           ; call get_real(value,jmaxc,name,origin)
     case ('pmax')            ; call get_real(value,pmax,name,origin)
 
 !   Time.
@@ -372,7 +374,7 @@ module paramfile
     implicit none
 
     call check_option(output_format,'output_format','ascii hdf5')
-    call check_option(state,'state','gaussian1 aa')
+    call check_option(state,'state','gaussian1 aa aa_quad')
     call check_option(integrator,'integrator','euler leapfrog yoshida4 rk4')
     call check_option(dt_switch,'dt_switch','fix var')
     call check_option(spatialorder,'spatialorder','two four')
@@ -385,6 +387,12 @@ module paramfile
     if (pmaxc <= pminc) call fail('pmaxc must be greater than pminc.')
     if (lminc < 0.0d0)  call fail('lminc must be greater than or equal to zero.')
     if (lmaxc <= lminc) call fail('lmaxc must be greater than lminc.')
+
+!   Radial action range of state aa_quad. The distribution carries
+!   exp(-J**2/sr**2), which at J = 6 sr is 2.3e-16 of its value at J = 0.
+    if (jmaxc <= 0.0d0) jmaxc = 6.0d0*sr
+    if (jminc < 0.0d0)  call fail('jminc must be greater than or equal to zero.')
+    if (jmaxc <= jminc) call fail('jmaxc must be greater than jminc.')
     if (dr <= 0.0d0)    call fail('dr must be positive.')
     if (Nrc <= 0 .or. Npc <= 0 .or. Nlc <= 0) call fail('Nrc, Npc and Nlc must be positive.')
     if (courant <= 0.0d0) call fail('courant must be positive.')
@@ -541,6 +549,8 @@ module paramfile
     call put_r(u,'pmaxc',pmaxc)
     call put_r(u,'lminc',lminc)
     call put_r(u,'lmaxc',lmaxc)
+    call put_r(u,'jminc',jminc)
+    call put_r(u,'jmaxc',jmaxc)
     call put_r(u,'pmax',pmax)
 
     write(u,'(a)') ''

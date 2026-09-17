@@ -35,8 +35,9 @@ rejilla. Base: `vlasov-poisson_PIC/reproducir/scripts/aa_numerico.py`. Afecta di
 "mixed yes/no" del borrador `Vlasov_Poisson_evolutions/main.md`.
 
 ### A3. El estado `aa` desplaza las partículas dentro de su celda
-**Hoy:** el estado `aa` desplaza cada partícula dentro de su celda (r,p) con una
-secuencia de Weyl para romper la "recurrencia".
+**Hoy:** el estado `aa` es una rejilla regular en (r,p,L) donde se evalúa F(Q,J,L).
+(Corrección: el desplazamiento con secuencia de Weyl solo existe en la rama
+`experimento/jitter`, no en la principal.)
 **Aprendido:** la recurrencia es el límite de Nyquist en J. Cualquier desplazamiento
 destruye la convergencia de cuadratura y deja el error en 1/sqrt(N) (medido y revertido,
 commit `c4df269`). Lo que funciona es una rejilla regular en las variables

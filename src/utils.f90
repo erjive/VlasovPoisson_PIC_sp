@@ -988,5 +988,59 @@ subroutine reduce_arrays
   end if
 end subroutine reduce_arrays
 
+  !> Invert the angle-action pair (Q,J) of a particle with angular momentum
+  !! L back to (r,p_r), in the isochrone of unit mass and scale.
+  !!
+  !! J and L fix the energy, E = -1/(2 (J+c)**2) with c = (L+sqrt(L**2+4))/2,
+  !! and the energy fixes the turning points. With s = 1+sqrt(1+r**2), the
+  !! radial motion is s = (s1+s2)/2 - (s2-s1)/2 cos(eta), and the angle obeys
+  !! the Kepler-like equation Q = eta - ecc sin(eta), solved by Newton-Raphson
+  !! (ecc < 1, so it converges from eta = Q). p_r >= 0 on the way out,
+  !! eta in [0,pi]. This is the inverse of the forward map in analysish.f90.
+  subroutine invert_QJ_to_rp(Qv,Jv,Lv,rv,pv)
+
+    implicit none
+
+    real(8), intent(in)  :: Qv,Jv,Lv
+    real(8), intent(out) :: rv,pv
+
+    real(8) :: Eg,er1,er2,s1,s2,ecc,eta,g,gp,Qm,sg,pv2,smallpi
+    integer :: it
+
+    smallpi = acos(-1.0d0)
+
+    Eg = -1.d0/(2.d0*(Jv+0.5d0*(Lv+sqrt(Lv**2+4.d0)))**2)
+
+    er1 = dsqrt((1.d0+Eg*(2.d0+Lv**2)-dsqrt(1.d0+2.d0*Eg*(2.d0+2.d0*Eg+Lv**2)))/(2.d0*Eg**2))
+    er2 = dsqrt((1.d0+Eg*(2.d0+Lv**2)+dsqrt(1.d0+2.d0*Eg*(2.d0+2.d0*Eg+Lv**2)))/(2.d0*Eg**2))
+    s1 = 1.d0 + sqrt(1.d0+er1**2)
+    s2 = 1.d0 + sqrt(1.d0+er2**2)
+
+!   Same eccentricity as in the forward map; it vanishes on circular orbits,
+!   where rounding can make the radicand slightly negative.
+    ecc = sqrt((-2.d0*Eg)**3)*sqrt(max(-Lv**2-2.d0*Eg-2.d0-0.5D0/Eg,0.0d0))/(-2.d0*Eg)
+
+    Qm = modulo(Qv,2.0d0*smallpi)
+    eta = Qm
+    do it=1,50
+      g  = eta - ecc*sin(eta) - Qm
+      gp = 1.d0 - ecc*cos(eta)
+      eta = eta - g/gp
+      if (abs(g) < 1.0d-14) exit
+    end do
+
+    sg = (s1+s2-cos(eta)*(s2-s1))/2.0d0
+    rv = sqrt(max((sg-1.d0)**2-1.d0,0.0d0))
+
+    pv2 = 2.d0*(Eg + 1.d0/(1.d0+dsqrt(1.d0+rv**2)) - 0.5d0*Lv**2/max(rv**2,1.0d-300))
+    pv2 = sqrt(max(pv2,0.0d0))
+    if (modulo(eta,2.0d0*smallpi) > smallpi) then
+      pv = -pv2
+    else
+      pv =  pv2
+    end if
+
+  end subroutine invert_QJ_to_rp
+
 end module utils
 

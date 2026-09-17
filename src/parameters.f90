@@ -36,6 +36,8 @@ module parameters
 
    real(8)   :: lminc =  0.0D0           !< Minimum angular momentum in the support of f.
    real(8)   :: lmaxc =  2.0D0           !< Maximum angular momentum in the support of f.
+   real(8)   :: jminc = 0.0D0            !< Minimum radial action of the support (state aa_quad)
+   real(8)   :: jmaxc = -1.0D0           !< Maximum radial action (aa_quad); <=0 means 6*sr
 
    real(8)   :: Fmax = 0.0D0             !< Maximum absolute value of the force.
 !   real(8)   :: Lfix = 1.0D0             !< Angular momentum
