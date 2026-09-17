@@ -183,13 +183,24 @@ avanza.
   `sphere`** sin `abs()` — cualquier partícula con `r_part` negativo
   transitorio (antes de la reflexión de simetría al final de cada
   paso) usa la fórmula interior sin importar su magnitud real.
-- [ ] **`grav_force.f90`: fondos `iso`, `isotrun`, `nfw`, `burkert` no
+- [x] **`grav_force.f90`: fondos `iso`, `isotrun`, `nfw`, `burkert` no
   actualizan `pot_part`/`force_part`**, solo los arreglos de malla
   `pot`/`force` — las partículas nunca sienten esa fuerza de fondo
   (solo el término centrífugo). Además esos arreglos solo se reservan
   si `autointeraction=.true.`, así que con `autointeraction=.false.`
   (el caso normal para un fondo fijo) se escribe en memoria no
   reservada.
+  *Hecho (A9):* `add_background` en `grav_force.f90` aplica `sphere`,
+  `iso`, `isotrun`, `nfw` y `burkert` a las partículas, los suma a la
+  autogravedad (antes `sphere` la reemplazaba) y toca la malla solo si
+  existe. Las parejas potencial/fuerza se verificaron con mpmath
+  (F=-dΦ/dr a ≤1.3e-28). t1/t2/t3 (Isochrone) y `sphere`/`null` sin
+  autogravedad, idénticos bit a bit. Con t1: antes las partículas
+  escapaban (r_min≈405, error de energía 2.4e6); ahora quedan ligadas y
+  el error máximo de energía es 3.2e-5 (iso), 7.7e-7 (isotrun), 4.6e-5
+  (nfw), 8.1e-6 (burkert), con convergencia de cuarto orden al reducir
+  dt (cocientes 15–16×; 10–26× en iso y burkert). `sphere` con
+  autogravedad (t2): 1.43e-4 → 2.0e-7.
 - [x] **`initial_data.f90` / `parameters.f90`: `state="gaussian"` (el
   valor por defecto) no coincide con ninguna rama** (`initial_data.f90`
   solo reconoce `"gaussian1"`, no `"gaussian"`), y no hay `else`/`stop`

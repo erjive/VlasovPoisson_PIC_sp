@@ -26,7 +26,6 @@ subroutine grav_force
   use arrays
   use utils
   implicit none
-  integer i
   real(8) :: smallpi
   character(100) :: filename
   smallpi = acos(-1.0d0)
@@ -55,25 +54,14 @@ subroutine grav_force
   if (forcetype=="bg") then
 
      if (BGtype == "null") then
-     
-        pot = pot 
-        force = force
-        pot_part = pot_part
-        force_part = force_part
+
+!       No background: only self-gravity, if any, and the centrifugal term.
+!       (The grid arrays it used to assign to themselves are not allocated
+!       without self-gravity.)
 
      else if (BGtype == "sphere") then
 
-       !$OMP PARALLEL DO SCHEDULE(GUIDED)
-       do i=1,Npart
-            if (r_part(i)<1.d0) then
-               pot_part(i)   =  0.5d0*(r_part(i)**2 - 3.d0)
-               force_part(i) = - r_part(i)
-            else
-               pot_part(i)   = - 1.d0/r_part(i)
-               force_part(i) = - 1.d0/r_part(i)**2
-            end if
-       end do
-       !$OMP END PARALLEL DO
+       call add_background
 
      else if (BGtype == "Isochrone") then
 
@@ -109,25 +97,10 @@ subroutine grav_force
 
        end if
 
-     else if (BGtype == "iso") then
+     else if (BGtype == "iso" .or. BGtype == "isotrun" .or. &
+              BGtype == "nfw" .or. BGtype == "burkert") then
 
-        pot   = 3.0d0*log(r)
-        force =-3.0d0/r
-
-     else if (BGtype == "isotrun") then
-
-        pot   = (10.0d0/6.0d0)*( 2.0d0*atan(r)/r + log(r**2+1) )
-        force = -(10.0d0/3.0d0)*( r-atan(r) )/r**2
-
-     else if (BGtype == "nfw") then
-
-        pot   = -16.0d0*log( 1.0d0+r )/r
-        force = -16.0d0*( log(1.0d0+r)-r/(1.0d0+r) )/r**2
-
-     else if (BGtype == "burkert") then
-
-        pot =    ( 10.0d0/(3.0d0*r) )*( 2.0d0*(1.0d0+r)*atan(r) -2.0d0*(1.0d0+r)*log(1.0d0+r) -(1.0d0-r)*log(1.0d0+r**2) )
-        force = -( 10.0d0/(3.0d0*r*r) )*( log( (1.0d0+r**2)*(1.0d0+r)**2 ) - 2.0d0*atan(r) )
+       call add_background
 
      else
 
@@ -161,5 +134,82 @@ subroutine grav_force
 
   !filename = 'vlasov_comparepotential'
   !call save1Ddata(directory,filename,Nr,t,r,pot)
+
+contains
+
+! Backgrounds given by closed formulas for the potential and the force
+! (force = -dpot/dr, checked symbolically for every one). Particles feel
+! them always; with self-gravity they are added to the self potential and
+! force, on the particles and on the grid (which only exists then).
+! Before, "sphere" replaced the self-gravity instead of adding to it, and
+! iso, isotrun, nfw and burkert only filled the grid arrays: particles
+! never felt them, and without self-gravity those arrays were not even
+! allocated.
+
+  subroutine add_background
+
+    if (autointeraction) then
+       pot_part   = pot_part   + bgpot(r_part)
+       force_part = force_part + bgforce(r_part)
+       pot(1:Nr)   = pot(1:Nr)   + bgpot(r(1:Nr))
+       force(1:Nr) = force(1:Nr) + bgforce(r(1:Nr))
+    else
+       pot_part   = bgpot(r_part)
+       force_part = bgforce(r_part)
+    end if
+
+  end subroutine add_background
+
+  elemental real(8) function bgpot(x)
+
+    real(8), intent(in) :: x
+
+    select case (BGtype)
+    case ("sphere")
+!      Constant density star of mass 1 and radius 1.
+       if (x<1.d0) then
+          bgpot = 0.5d0*(x**2 - 3.d0)
+       else
+          bgpot = - 1.d0/x
+       end if
+    case ("iso")
+       bgpot = 3.0d0*log(x)
+    case ("isotrun")
+       bgpot = (10.0d0/6.0d0)*( 2.0d0*atan(x)/x + log(x**2+1) )
+    case ("nfw")
+       bgpot = -16.0d0*log( 1.0d0+x )/x
+    case ("burkert")
+       bgpot = ( 10.0d0/(3.0d0*x) )*( 2.0d0*(1.0d0+x)*atan(x) -2.0d0*(1.0d0+x)*log(1.0d0+x) &
+               -(1.0d0-x)*log(1.0d0+x**2) )
+    case default
+       bgpot = 0.0d0
+    end select
+
+  end function bgpot
+
+  elemental real(8) function bgforce(x)
+
+    real(8), intent(in) :: x
+
+    select case (BGtype)
+    case ("sphere")
+       if (x<1.d0) then
+          bgforce = - x
+       else
+          bgforce = - 1.d0/x**2
+       end if
+    case ("iso")
+       bgforce = -3.0d0/x
+    case ("isotrun")
+       bgforce = -(10.0d0/3.0d0)*( x-atan(x) )/x**2
+    case ("nfw")
+       bgforce = -16.0d0*( log(1.0d0+x)-x/(1.0d0+x) )/x**2
+    case ("burkert")
+       bgforce = -( 10.0d0/(3.0d0*x*x) )*( log( (1.0d0+x**2)*(1.0d0+x)**2 ) - 2.0d0*atan(x) )
+    case default
+       bgforce = 0.0d0
+    end select
+
+  end function bgforce
 
 end subroutine grav_force
