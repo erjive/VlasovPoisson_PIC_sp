@@ -1,10 +1,14 @@
-! ************************
-! ***   MAIN PROGRAM   ***
-! ************************
+! ===========================================================================
+! main.f90
+! ===========================================================================
+!> Particle-in-cell evolution of the spherically symmetric Vlasov-Poisson
+!! system with a distribution of angular momentum: each particle carries
+!! (r, p_r, L) and a phase-space weight f, moves in a background potential
+!! plus, optionally, its own gravity, and L is conserved.
+!!
+!!     ./VP_PIC [file] [name=value] ...      (see paramfile.f90)
 
 program VP_PIC
-
-! Include modules
 
   use parameters
   use paramfile
@@ -12,19 +16,15 @@ program VP_PIC
   use utils
   use hdf5_io
 
-
-! Declare variables.
-
   implicit none
 
   integer i,j,k,l       ! Counters
   logical :: sync       ! Does this step need the force at its final positions?
 
-! Coefficients for the 4th-order symplectic integrator "yoshida4"
-! (Yoshida, Phys. Lett. A 150, 262 (1990)): composes three
-! leapfrog-like drift/kick sub-steps, with weights chosen so that the
-! dt^3 local error term of a single 2nd-order (leapfrog) step cancels
-! between them, leaving a dt^5 local (dt^4 global) error instead.
+! Coefficients of the 4th-order symplectic integrator "yoshida4" (Yoshida,
+! Phys. Lett. A 150, 262 (1990)): three drift-kick sub-steps whose weights
+! cancel the dt^3 local error of a single leapfrog step, leaving a dt^5 local
+! (dt^4 global) error.
 
   real(8), parameter :: yg_cbrt2 = 1.2599210498948732d0            ! 2**(1/3)
   real(8), parameter :: yg_w1    = 1.d0/(2.d0-yg_cbrt2)
@@ -87,45 +87,26 @@ program VP_PIC
 
   if (output_format=="hdf5") call open_hdf5_file()
 
-! Initialize time.
-
   t = 0.0d0
 
-! **************************************
-! ***   FIND DENSITY AND FLUX IN r   ***
-! **************************************
+! *********************************************
+! ***   INITIAL DENSITY, FORCE AND ENERGY   ***
+! *********************************************
+
   call density
 
-! **************************************************
-! ***   FIND GRAVITATIONAL POTENTIAL AND FORCE   ***
-! **************************************************
   call grav_force()
 
-! **************************************************************
-! ***   FIND TOTAL NUMBER OF PARTICLES                       ***
-! ***   AVERAGE KINETIC ENERGY, POTENTIAL AND TOTAL ENERGY   ***
-! **************************************************************
+  call energy
 
-!  call integrate
-   call energy
+  call analysish
 
-! ************************
-! *** INITIAL ANALYSIS ***
-! ************************
+! The time step is set once, from the initial force (see set_timestep).
 
-   call analysish
-
-!  ***************************
-!  ***  INITIAL TIME STEP  ***
-!  ***************************
   call set_timestep()
 
   print *
   print *, 'Time step fixed at size: ',dt
-
-! *****************************
-! ***   OUTUPUT TO SCREEN   ***
-! *****************************
 
   print *
   print *,'------------------------------'
@@ -134,15 +115,11 @@ program VP_PIC
 
   write(*,"(A5,I7,A5,ES11.4,A4)") ' |   ',0,'   | ',t,'  | '
 
-
-! *********************************
-! ***   SAVE THE INITIAL DATA   ***
-! *********************************
-   if (output_format=="hdf5") then
-      call save_data_hdf5(0)
-   else
-      call save_data()
-   end if
+  if (output_format=="hdf5") then
+     call save_data_hdf5(0)
+  else
+     call save_data()
+  end if
 
 
 ! *************************************
@@ -150,8 +127,6 @@ program VP_PIC
 ! *************************************
 
   do l=1,Nt
-
-!    Time.
 
      t = t + dt
 
@@ -163,8 +138,6 @@ program VP_PIC
 
      sync = (mod(l,spatial_output) == 0) .or. (dt_switch == "var")
 
-!    Save old time step.
-
 !    Only euler and leapfrog read the values at the start of the step;
 !    yoshida4 updates in place.
 
@@ -173,115 +146,85 @@ program VP_PIC
        p_part_p = p_part
      end if
 
- 
-!    Euler method (forward differencing in time, first order).
-
      if (integrator=='euler') then
+
+!      Forward differencing in time, first order.
 
        r_part = r_part_p + p_part*dt
        p_part = p_part_p + force_part*dt
 
        call grav_force()
-!   Second order leapfrog method
 
-    else if (integrator == 'leapfrog') then
+     else if (integrator == 'leapfrog') then
 
-!     Leapfrog integration 'kick-drift-kick' form
+!      Second order, kick-drift-kick.
 
-      p_part_h = p_part_p + force_part*dt*0.5D0
-      r_part   = r_part_p + p_part_h * dt
+       p_part_h = p_part_p + force_part*dt*0.5D0
+       r_part   = r_part_p + p_part_h * dt
 
-      call  grav_force()
+       call  grav_force()
 
-      p_part   = p_part_h + force_part*dt*0.5D0
+       p_part   = p_part_h + force_part*dt*0.5D0
 
-!   Fourth order symplectic integrator (Yoshida 1990), composed of
-!   three leapfrog-like drift-kick sub-steps -- see the coefficient
-!   definitions near the top of this program.  Costs 3 force
-!   evaluations per step (vs 1 for leapfrog), plus one after the final
-!   drift on the steps whose diagnostics need it (see "sync" above), but
-!   tolerates a larger dt for the same energy-conservation accuracy.
+     else if (integrator == 'yoshida4') then
 
-    else if (integrator == 'yoshida4') then
+!      Fourth order symplectic (coefficients above): drift, then three
+!      kick-drift pairs. Each kick is fused with the drift that follows it
+!      into one parallel pass over the particles. Three force evaluations per
+!      step, plus one after the final drift on the steps that need it (sync).
 
-!   Each kick is fused with the drift that follows it into one parallel
-!   pass over the particles; the per-particle arithmetic is unchanged.
+       !$OMP PARALLEL DO SCHEDULE(STATIC)
+       do i=1,Npart
+         r_part(i) = r_part(i) + yg_c1*dt*p_part(i)
+       end do
+       !$OMP END PARALLEL DO
+       call grav_force()
 
-      !$OMP PARALLEL DO SCHEDULE(STATIC)
-      do i=1,Npart
-        r_part(i) = r_part(i) + yg_c1*dt*p_part(i)
-      end do
-      !$OMP END PARALLEL DO
-      call grav_force()
+       !$OMP PARALLEL DO SCHEDULE(STATIC)
+       do i=1,Npart
+         p_part(i) = p_part(i) + yg_d1*dt*force_part(i)
+         r_part(i) = r_part(i) + yg_c2*dt*p_part(i)
+       end do
+       !$OMP END PARALLEL DO
+       call grav_force()
 
-      !$OMP PARALLEL DO SCHEDULE(STATIC)
-      do i=1,Npart
-        p_part(i) = p_part(i) + yg_d1*dt*force_part(i)
-        r_part(i) = r_part(i) + yg_c2*dt*p_part(i)
-      end do
-      !$OMP END PARALLEL DO
-      call grav_force()
+       !$OMP PARALLEL DO SCHEDULE(STATIC)
+       do i=1,Npart
+         p_part(i) = p_part(i) + yg_d2*dt*force_part(i)
+         r_part(i) = r_part(i) + yg_c3*dt*p_part(i)
+       end do
+       !$OMP END PARALLEL DO
+       call grav_force()
 
-      !$OMP PARALLEL DO SCHEDULE(STATIC)
-      do i=1,Npart
-        p_part(i) = p_part(i) + yg_d2*dt*force_part(i)
-        r_part(i) = r_part(i) + yg_c3*dt*p_part(i)
-      end do
-      !$OMP END PARALLEL DO
-      call grav_force()
-
-      !$OMP PARALLEL DO SCHEDULE(STATIC)
-      do i=1,Npart
-        p_part(i) = p_part(i) + yg_d3*dt*force_part(i)
-        r_part(i) = r_part(i) + yg_c4*dt*p_part(i)
-      end do
-      !$OMP END PARALLEL DO
-      if (sync) call grav_force()
-
-!    Exact advance in angle-action variables (no self-gravity only).
+       !$OMP PARALLEL DO SCHEDULE(STATIC)
+       do i=1,Npart
+         p_part(i) = p_part(i) + yg_d3*dt*force_part(i)
+         r_part(i) = r_part(i) + yg_c4*dt*p_part(i)
+       end do
+       !$OMP END PARALLEL DO
+       if (sync) call grav_force()
 
      else if (integrator == 'analytic') then
+
+!      Exact advance in angle-action variables (no self-gravity only).
 
        call advance_analytic(t)
        if (sync) call grav_force()
 
-!    Fourth order Runge-Kutta.
-
-     else if (integrator=='rk4') then
-
-        print *
-        print *, 'Fourth order Runge-Kutta not yet implemented.'
-        print *, 'Aborting ...'
-        print *
-        stop 1
-
-!    Unknown integration method.
-
-     else
-
-        print *, 'Unknown integration method.'
-        print *, 'Aborting ...'
-        print *
-        stop 1
-
      end if
 
-!   At the origin impose symmetry condition f(r,p) = f(-r,-p)
+!    At the origin impose the symmetry condition f(r,p) = f(-r,-p).
 
-    if (rmin == 0) then
-      !$OMP PARALLEL DO SCHEDULE(STATIC)
-      do i=1,Npart
-        if (r_part(i)<0.d0) then
-          r_part(i) = -r_part(i)
-          p_part(i) = -p_part(i)
-        end if
-      end do
-      !$OMP END PARALLEL DO
-    end if
-
-!    **************************************
-!    ***   FIND DENSITY AND FLUX IN r   ***
-!    **************************************
+     if (rmin == 0) then
+       !$OMP PARALLEL DO SCHEDULE(STATIC)
+       do i=1,Npart
+         if (r_part(i)<0.d0) then
+           r_part(i) = -r_part(i)
+           p_part(i) = -p_part(i)
+         end if
+       end do
+       !$OMP END PARALLEL DO
+     end if
 
 !    Density and energies for the output. With self-gravity the averaged
 !    density that Poisson needs is recomputed inside grav_force.
@@ -291,72 +234,17 @@ program VP_PIC
         call energy
      end if
 
-
-! ******************************************************************
-! ***   FIND GRAVITATIONAL POTENTIAL AND FORCE ON THE PARTICLES  ***
-! ******************************************************************
-     !call grav_force()
-
-
-!    **********************************
-!    ***   SOLVE POISSON EQUATION   ***
-!    **********************************
-
-!    For the self gravitating case solve
-!    the Poisson equation again.
-
-!     if (forcetype=="self") then
-!        !call poisson
-!     end if
-
-
-
-!    *****************************************
-!    ***   CALCULATE CONTINUITY EQUATION   ***
-!    *****************************************
-
-!    The continuity equation has the form:
-!
-!    cont  =  0  =  d(rho)/dt + div(curr)  = d(rho)/dt + (1/r**2) d(r**2 curr)/dr
-!
-!                =  d(rho)/dt + d(curr)/dr + 2 curr / r
-!
-!    Notice that this should converge to zero.  The expression below is only
-!    second order accurate.
-
-!     if (mod(l,spatial_output).eq.0) then
-!        do i=1,Nr-1
-!           cont(i) = (rho(i) - rho_p(i))/dt &
-!                + 0.25d0*(curr(i+1) + curr_p(i+1) - curr(i-1) - curr_p(i-1))/dr &
-!                + (curr(i) + curr_p(i))/r(i)
-!        end do
-!     end if
-
-
-!    ***************************
-!    ***   ADAPT TIME STEP   ***
-!    ***************************
-
 !    By default (dt_switch="fix") the time step computed from the initial
-!    force before the loop is kept for the whole run. A step that changes
-!    from one step to the next breaks the symplectic character of leapfrog
-!    and yoshida4: the energy error stops being bounded. For the phase
-!    mixing runs the results did not depend on dt between 0.05 and 0.2 with
-!    a fixed step (vlasov-poisson_PIC, notes section 9), so choose dt with
-!    such a test instead of adapting it.
-!
-!    dt_switch="var" recomputes dt from the force at the new positions,
-!    for runs where the force grows a lot (e.g. a collapsing cloud). The
-!    new dt is used to advance the next step.
+!    force is kept for the whole run: a step that changes from one step to
+!    the next breaks the symplectic character of leapfrog and yoshida4, and
+!    the energy error stops being bounded. Choose dt with a convergence test
+!    instead. dt_switch="var" recomputes dt from the force at the new
+!    positions, for runs where the force grows a lot (e.g. a collapsing
+!    cloud); the new dt advances the next step.
 
      if (dt_switch == "var") then
        call set_timestep()
      end if
-
-
-!    *****************************
-!    ***   SAVE DATA TO FILE   ***
-!    *****************************
 
 !    field_output gates the particle and grid snapshot, the bulk of the
 !    disk footprint, so h_k (analysish, every spatial_output steps) can be
@@ -373,26 +261,14 @@ program VP_PIC
      end if
 
      if (mod(l,spatial_output).eq.0) then
-
         call analysish
-
      end if
 
-!    *************************************************
-!    ***   IF POSSIBLE REDUCE SIZE OF THE ARRAYS   ***
-!    *************************************************
+!    Discard particles beyond rmax.
 
      if (reduceparticles .and. (mod(l,Nreduce).eq.0)) then
-!     if (mod(l,time_output).eq.0) then
        call reduce_arrays
-
      end if
-
-!    ***********************************
-!    ***   END MAIN EVOLUTION LOOP   ***
-!    ***********************************
-
-!    Time step information to screen.
 
      if (mod(l,time_output).eq.0) then
         write(*,"(A5,I7,A5,ES11.4,A4)") ' |   ',l,'   | ',t,'  | '
@@ -406,6 +282,7 @@ program VP_PIC
 ! ***************
 ! ***   END   ***
 ! ***************
+
   print *, 'Minimum radii of particles = ', minval(r_part)
   print *, 'Maximum radii of particles = ', maxval(r_part)
   print *, 'Minimum momenta of particles = ', minval(p_part)

@@ -1,7 +1,9 @@
 ! ===========================================================================
 ! initial_data.f90
 ! ===========================================================================
-!> Here are initialized all the functions defined on the grid.
+!> Initial particles: position r, radial momentum p, angular momentum L and
+!! phase-space weight f, on a regular grid (states gaussian1, aa, aa_quad) or
+!! read from a file (checkpoint). The mass is normalized to a0.
 
 
   subroutine initial_data
@@ -13,18 +15,15 @@
 
     implicit none
 
-    logical :: accepted
     integer :: i,j,k,indx
     real(8) :: smallpi,f_max
     real(8) :: raux,paux,laux
-    real(8) :: rand3(3)
     real(8) :: gaussian
-    real(8) :: w,x,y,z
-    real(8) :: energy 
+    real(8) :: energy
 
-!   Auxiliary variables for a distribution function 
-!   that depends on action-angle varialbes
-    real(8) :: J3, Q3, w3, s, s1, s2, er1, er2, eta, argaux
+!   Auxiliary variables for a distribution function
+!   that depends on angle-action variables
+    real(8) :: J3, Q3, s, s1, s2, er1, er2, eta, argaux
 !   Midpoint grid of state aa_quad
     real(8) :: djc, dqc
 !   State checkpoint
@@ -32,18 +31,8 @@
 
     smallpi = acos(-1.0d0)
 
-! 
-! For a fixed value of L, We generate particles for an 
-! arbitrary distribution function f(r,pr,L) via an acceptance-rejection method.
-! Let fmax the maximum value of f. We generate arbitrary (x,y,z) numbers 
-! in the range of (rmin,rmax), (pmin,pmax), (0,fmax) respectively. 
-! Then evaluate W=f(x,y,L), if z<=W, accept the point, 
-! otherwise, repeat until the condition in fulfilled.
-
-
-! Initial data for the density function. Notice that
-! we add two copies of the function in order to guarantee 
-! that the ! boundary condition f(-r,-p) = f(r,p) is satisfied.
+! Cells of the support in (r,p,L). The gaussian1 profile adds the mirror
+! image at (-r0,-p0) so that f(-r,-p) = f(r,p) holds at the origin.
 
 ! Find the size of the cell
 
@@ -54,13 +43,9 @@
     print *, "(drc,dpc,dlc)=",drc,dpc,dlc
     if(state.eq."gaussian1") then
 
-!     indx used to be incremented by hand each iteration, which is a
-!     loop-carried dependency that blocks parallelizing the triple
-!     loop below (hence the disabled "!!$OMP" that used to be here).
-!     Since (k,i,j) -> indx = (k-1)*Nrc*Npc + (i-1)*Npc + j is exactly
-!     the index this nesting order produces one at a time, computing
-!     it directly removes that dependency: every thread writes only
-!     to its own indx, so the loop is safe to collapse fully.
+!     Regular grid in (r,p,L): cell (k,i,j) is particle
+!     indx = (k-1)*Nrc*Npc + (i-1)*Npc + j, computed directly so that every
+!     thread writes only its own entries.
 
       !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(i,j,k,indx,raux,paux,laux) COLLAPSE(3)
       do k=1,Nlc
@@ -105,11 +90,8 @@
     
     else if(state .eq."aa") then
 
-!     Same indx dependency removed as in the gaussian1 branch above
-!     (the "aa" branch's own !!$OMP was disabled for the same reason).
-!     This loop body is far more expensive per iteration (several
-!     sqrt/trig evaluations), so it's the branch that benefits most
-!     from actually running in parallel.
+!     Regular grid in (r,p,L), indexed as in gaussian1, with f evaluated at
+!     the isochrone angle-action variables of each node.
 
       !$OMP PARALLEL DO SCHEDULE(GUIDED) &
       !$OMP PRIVATE(i,j,k,indx,raux,paux,laux,energy,er1,er2,s1,s2,s,argaux,eta,Q3,J3) &

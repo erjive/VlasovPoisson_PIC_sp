@@ -1,8 +1,6 @@
   subroutine poisson_rk
 
-! Erik: This subroutine was originally written by Miguel Alcubierre
-! I adapted it for the vlasov_PIC code. 
-! WARNING: This subroutine does not execute in parallel
+! Originally written by Miguel Alcubierre; adapted to this code by Erik.
 ! *******************
 ! ***   POISSON   ***
 ! *******************
@@ -36,7 +34,7 @@
 
   implicit none
 
-  integer i,j,l
+  integer i,j
 
   real(8) spot,sdev_pot
   real(8) poth,dev_poth
@@ -44,7 +42,6 @@
   real(8) cutoff_interp
   integer :: Wgrid,jc,jlo,jhi
   real(8) :: w
-  character(100) :: filename
 
 ! *******************
 ! ***   NUMBERS   ***
@@ -135,13 +132,8 @@
 
   pot = pot - (pot(Nr) - force(Nr)*r(Nr))
 
-! *******************************
-! ***   ADD ANGULAR MOMENTUM  ***
-! *******************************
-!  if(Lfix /= 0.0d0) then
-!     pot   = pot + 0.5d0*Lfix*Lfix/(r*r + eps*eps)
-!     force = force + Lfix*Lfix*r/(r*r + eps*eps)**2
-!  end if
+! The centrifugal term depends on each particle's L, so it is added per
+! particle in grav_force, not on the grid.
 
 ! So far we have solved for the potential and the force 
 ! felt on the mesh. In order to calculate the force that 
@@ -151,22 +143,10 @@
   pot_part   = 0.0D0
   force_part = 0.0D0
 
-! Since the grid r(1:Nr) is uniform with spacing dr and already
-! indexed in order (r(k) = r(1) + (k-1)*dr for both grid conventions
-! in construct_grid), we don't need a cell list here as in
-! density()/avg_density(): for each particle we can find the small
-! range of nearby grid indices directly by inverting that formula,
-! instead of scanning all Nr grid points.  This turns the
-! O(Npart*Nr) brute-force search into ~O(Npart).  The exact distance
-! check below is unchanged, so this is a pure performance change.
-!
-! NOTE: parallelize only over "i" (not collapse(2) over i and j).
-! pot_part(i)/force_part(i) are accumulated across all j for a given
-! i, so collapsing i and j lets different threads update the same i
-! concurrently with no atomic/reduction protection -- a data race.
-! Keeping the parallel loop over i alone means each i is owned by
-! exactly one thread for the whole inner j loop, which is race-free
-! without needing atomics.
+! Interpolation to the particles. The grid is uniform, r(k) = r(1)+(k-1) dr,
+! so the nodes near a particle follow from inverting that formula, without a
+! cell list. The loop runs in parallel over particles: each pot_part(i) and
+! force_part(i) belongs to one thread for its whole inner loop.
 
   cutoff_interp = (dble(bsplineorder)+1.0d0)*dr
 
@@ -200,25 +180,6 @@
     end do
   end do
   !$OMP END PARALLEL DO
-
-!  filename = 'vlasov_potpart'
-!  call save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,pot_part)
-
-!     if (mod(l,spatial_output).eq.0) then
-
-!  filename = 'vlasov_potpoisson'
-!  call save1Ddata(directory,filename,Nr,t,r,pot)
-
-!  filename = 'vlasov_potpoisson_r0'
-!  call save0Ddata(directory,filename,t,pot(1))
-
-!     end if
-
-
-
-! ***************
-! ***   END   ***
-! ***************
 
   end subroutine poisson_rk
 

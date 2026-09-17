@@ -26,16 +26,13 @@ module utils
     Nr = int((rmax-rmin)/dr)
     if (rmin==0.0d0) Nr=Nr+1
 
-    ! Find out number of grid points in p direction.
-    !Np = 2*int(pmax/dp)
-
     print *
     print *, 'Number of points in r direction ',Nr
-    !print *, 'Number of points in p direction ',Np
 
-    ! Minimum radius when the angular momentum is fix.
-    !eps = Lfix/(10.0D0*pmax)
-     eps = 0.0D0
+    ! No softening of the centrifugal term: the angle-action maps (analysish,
+    ! aa_quad, analytic) use the unsoftened L**2/(2 r**2), and a softened
+    ! potential would not match them.
+    eps = 0.0D0
   end subroutine set_grid_size
 
   !> Allocate all memory
@@ -114,10 +111,8 @@ module utils
 ! Density function f and sources.
 
   allocate(f  (1:Npart))
-  !allocate(f_p(1:Npart))
 
   f   = 0.0d0
-  !f_p = 0.0d0
 
 ! Integrates density, current and continuity equation.
 
@@ -162,11 +157,7 @@ module utils
 
   deallocate(r)
 
-! force, pot and dev_pot are only allocated in alloc_mem_set0
-! if (autointeraction); deallocating them unconditionally (as this
-! subroutine used to) crashes when autointeraction=.false. (never
-! allocated), and deallocating pot/dev_pot a second time afterwards
-! when autointeraction=.true. is a double free.
+! force, pot and dev_pot only exist with self-gravity (alloc_mem_set0).
 
   if (autointeraction) then
     deallocate(force)
@@ -177,7 +168,6 @@ module utils
 ! Density function f
 
   deallocate(f)
-!  deallocate(f_p)
 
   deallocate(rho)
   deallocate(rho_p)
@@ -308,32 +298,15 @@ end subroutine construct_grid
 
   dtr = courant*dr/pmax
 
-! Now bound the time step using the maximum value of the
-! force (acceleration).  Rather than requiring that the
-! momentum change per step stay below a fixed momentum-space
-! cell width dpc (a resolution scale unrelated to the actual
-! dynamics, and linear in 1/Fmax, i.e. needlessly restrictive
-! for large forces), we use the standard "acceleration"
-! criterion from symplectic N-body/leapfrog integration
-! (e.g. Gadget-2, Springel 2005): the time to move a distance
-! drc (the radial resolution scale of the phase-space support)
-! under a constant acceleration Fmax, i.e.
+! The step is also bounded with the acceleration criterion of symplectic
+! N-body integration (e.g. Gadget-2, Springel 2005): the time to move a
+! distance drc (the radial cell of the phase-space support) under the
+! largest force,
 !
-!   dtp = courant * sqrt(2*drc/Fmax)
+!   dtp = courant * sqrt(2*drc/Fmax).
 !
-! This is directly tied to the local curvature of the force
-! field (an oscillator integrated with leapfrog is stable for
-! dt*omega <~ 2, with omega^2 ~ dF/dr) instead of to an
-! arbitrary momentum bin size, and it is less restrictive than
-! the previous criterion when Fmax is large, since it scales
-! as 1/sqrt(Fmax) instead of 1/Fmax.
-
-! Force can be nonzero from a fixed background (BGtype/="null") *or*
-! from self-gravity (autointeraction) -- gating this solely on BGtype
-! (as before) silently skipped the force-based criterion whenever
-! BGtype=="null", even with autointeraction=.true., leaving dt fixed
-! at the plain CFL value dtr regardless of how large the self-gravity
-! force actually got.
+! The force comes from the background or from self-gravity. By default this
+! runs once, before the main loop (dt_switch="fix").
 
   if (BGtype /= "null" .or. autointeraction) then
     Fmax = 0.0d0
@@ -363,7 +336,6 @@ end subroutine construct_grid
 
 !   Save distribution function f.
     filename = 'vlasov_fdist'
-    !call save3Ddata_particles(directory,filename,Npart,t,r_part,p_part,l_part,f)
     call save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,l_part*f)
 
 !   Save rho, curr and cont (multiplied by r**2).
@@ -386,8 +358,6 @@ end subroutine construct_grid
     call save0Ddata(directory,filename,t,total_energy)
     filename = 'vlasov_k_phi_e'
     call save_energy(directory,filename,t,kinetic,potential,total_energy)
-!    filename = 'vlasov_cont'
-!    call save1Ddata(directory,filename,Nr,Np,t,r,r**2*cont)
 
 
 !   Save force and potential.
@@ -957,7 +927,6 @@ subroutine reduce_arrays
   deallocate(potself_part)
   deallocate(force_part)
   deallocate(f)
-!  deallocate(f_p)
 
 ! Allocate arrays 
 
@@ -975,7 +944,6 @@ subroutine reduce_arrays
   potself_part = 0.d0
   allocate(force_part(1:Npart))
   allocate(f(1:Npart))
-!  allocate(f_p(1:Npart))
 
   j = 1
   do i=1,Npart_aux

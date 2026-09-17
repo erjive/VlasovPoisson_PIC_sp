@@ -313,6 +313,16 @@ avanza.
     y 5.2e-11 (yoshida4) en k=0,1; el error de cuadratura en J converge
     como h² (cociente 4.00 de N_J=50 a 1600, con L integrado exacto).
 
+- [x] **Comentarios de bitácora y código muerto** (MEJORAS B8). Los
+  comentarios describen método y física, no la historia de los cambios;
+  se quitaron bloques comentados (ramas `Lfix`, ecuación de continuidad,
+  llamadas de escritura, `f_p`), variables sin uso (avisos del
+  compilador: 19 → 8) y la opción `rk4`, que solo abortaba (ahora la
+  rechaza `read_parameters`). Verificado con salidas idénticas bit a bit:
+  t1/t2/t3, leapfrog, euler, `dt_switch=var`, `aa_quad` con autogravedad
+  y bsplineorder 2, king con analytic, nfw, el caso que cruza el origen y
+  `checkpoint` del equilibrio con autogravedad.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
@@ -699,8 +709,8 @@ avanza.
   compilaría si se descomenta tal cual.
   *Hecho:* se corrigió y activó en `506a3df`; con B1 sus comprobaciones pasaron a
   `validate` en `paramfile.f90` y la subrutina se eliminó.
-- [ ] Integrador `rk4` declarado como opción válida pero no
-  implementado (aborta con mensaje).
-- [ ] Limpiar el código muerto/comentado en el bucle principal de
+- [x] Integrador `rk4` declarado como opción válida pero no
+  implementado (aborta con mensaje). *Retirado (B8).*
+- [x] Limpiar el código muerto/comentado en el bucle principal de
   `main.f90` (ecuación de continuidad, paso de tiempo adaptativo para
   autogravedad, etc.).

@@ -1,22 +1,17 @@
-
-! **************************************************
-! ***   FIND GRAVITATIONAL POTENTIAL AND FORCE   ***
-! **************************************************
-
-! Background field case.  Here we assume that the background
-! gravitational field corresponds to the case of a constant
-! density star of total mass 1 and radius 1, which has a
-! gravitational potential "pot" given by:
-!
-! pot  =  1/2 ( r**2 - 3 )     r <  1
-!
-! pot  =  - 1 / r              r >= 1  
-!
-! for which the force is (force = - dpot/dr):
-!
-! force  = - r                 r <  1
-! 
-! force  = - 1 / r**2          r >= 1
+! ===========================================================================
+! grav_force.f90
+! ===========================================================================
+!> Potential and radial force on every particle: self-gravity (if
+!! autointeraction), plus the background BGtype, plus the centrifugal term
+!! L**2/(2 r**2) of the particle's own angular momentum.
+!!
+!! Backgrounds (unit mass and scale; force = -dpot/dr):
+!!   Isochrone  pot = -1/(1+sqrt(1+r**2))
+!!   Central    pot = -1/r
+!!   sphere     constant density star of radius 1: pot = (r**2-3)/2 inside,
+!!              -1/r outside
+!!   iso, isotrun, nfw, burkert   see bgpot below
+!!   null       none
 
 subroutine grav_force
 
@@ -27,13 +22,9 @@ subroutine grav_force
   use utils
   implicit none
   integer :: i
-  real(8) :: smallpi
   real(8) :: sq,den      ! per-particle sqrt(1+r**2) and r**2+eps**2
-  character(100) :: filename
-  smallpi = acos(-1.0d0)
 
-! Self-gravitating case.  In this case we need to
-! solve the Poisson equation.
+! Self-gravity: solve the Poisson equation for the current particles.
 
   if (autointeraction) then
 
@@ -149,26 +140,12 @@ subroutine grav_force
 
   end if
 
-        !pot   = pot + 0.5d0*Lfix**2/(r**2 + eps*eps)
-        !force = force + Lfix**2*r/(r**2 + eps*eps)**2
-
-
-  !filename = 'vlasov_potpart'
-  !call save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,pot_part)
-
-  !filename = 'vlasov_comparepotential'
-  !call save1Ddata(directory,filename,Nr,t,r,pot)
-
 contains
 
 ! Backgrounds given by closed formulas for the potential and the force
 ! (force = -dpot/dr, checked symbolically for every one). Particles feel
 ! them always; with self-gravity they are added to the self potential and
-! force, on the particles and on the grid (which only exists then).
-! Before, "sphere" replaced the self-gravity instead of adding to it, and
-! iso, isotrun, nfw and burkert only filled the grid arrays: particles
-! never felt them, and without self-gravity those arrays were not even
-! allocated.
+! force, on the particles and on the grid, which only exists then.
 
   subroutine add_background
 

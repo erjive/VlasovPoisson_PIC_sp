@@ -41,8 +41,7 @@ module parameters
    character(16) :: dftype = "gauss"     !< Distribution of state aa_quad (gauss,bimodal,spiral,king)
 
    real(8)   :: Fmax = 0.0D0             !< Maximum absolute value of the force.
-!   real(8)   :: Lfix = 1.0D0             !< Angular momentum
-   real(8)   :: eps  = 0.0D0             !< Softening length for angular momentum.
+   real(8)   :: eps  = 0.0D0             !< Softening of the centrifugal term; kept at 0 (see set_grid_size)
    integer   :: ghost = 0                !< Number of ghost zones.
    !Time
    real(8)   :: courant = 0.5D0           !< Courant factor
@@ -88,7 +87,7 @@ module parameters
 
    !Methods
    integer        :: bsplineorder = 1     !< B-spline order
-   character(20)  :: integrator = "euler"   !< Time integrator method (euler,icn,rk4)
+   character(20)  :: integrator = "euler"   !< Time integrator (euler,leapfrog,yoshida4,analytic)
    character(20)  :: spatialorder = "two"        !< Spatial order of discretization.
    character(20)  :: forcetype = "bg"     !< Background force (bg). Self-gravity: autointeraction; no background: BGtype=null
    character(20)  :: BGtype = "sphere"    !< Type of background. When the gravitational force is fix (sphere,iso,isotrun,nfw,burkert)

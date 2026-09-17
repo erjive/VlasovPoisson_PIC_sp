@@ -155,8 +155,7 @@ module distribution
 
 
 !> Window in J that contains the whole distribution, for the quadrature grid.
-!! Each profile declares its own, so the quadrature no longer borrows the width
-!! of one particular distribution.
+!! Each profile declares its own.
 
   subroutine df0_Jrange(Jlo,Jhi)
 

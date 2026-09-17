@@ -41,9 +41,9 @@
     real(8) :: smallpi
 
 !   Simpson intervals for the angular integral (must be even). With sq=0.1
-!   A(Q) is narrow and 20 intervals gave a_k with relative errors of
-!   1.2e-2 (k=0) to 3.2e-2 (k=4); 512 give <= 2.2e-16 against the closed
-!   form a_k = exp(-x) I_k(x), x = 1/(2 sq**2). It is evaluated once per run.
+!   A(Q) is narrow: 20 intervals give a_k with relative errors of 1.2e-2
+!   (k=0) to 3.2e-2 (k=4), 512 give <= 2.2e-16 against the closed form
+!   a_k = exp(-x) I_k(x), x = 1/(2 sq**2). It is evaluated once per run.
     integer, parameter :: nquad = 512
     real(8) :: quadQ(0:nquad),quadW(0:nquad)  !Quadrature nodes/weights on [0,pi]
     real(8) :: hstep
@@ -122,15 +122,15 @@
     hk2 = (0.d0,0.d0)
 
 ! Unbound particles (E >= 0) have no action-angle variables: the formulas
-! above give NaN, and a single one turned every h_k into NaN for the whole
-! run. They are left out, which is the continuous extension of the test
-! function: J -> infinity as E -> 0-, and B(J) -> 0.
+! above give NaN, and a single one would turn every h_k into NaN. They are
+! left out, which is the continuous extension of the test function:
+! J -> infinity as E -> 0-, and B(J) -> 0.
 
 ! Each thread sums its own share of particles into a local accumulator,
 ! and the shares are added afterwards in thread order. An OpenMP reduction
-! combines the shares in whatever order the threads finish, which changed
-! h_k at 1e-15 from one run to the next; this way the result is the same to
-! the last bit in every run with the same number of threads.
+! would combine them in whatever order the threads finish, which varies
+! from run to run; this way h_k is reproducible to the last bit for a given
+! number of threads.
 
     nth = 1
 !$  nth = omp_get_max_threads()
