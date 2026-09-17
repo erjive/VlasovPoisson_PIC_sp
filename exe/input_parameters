@@ -1,36 +1,35 @@
-0.03125   ! Grid spacing dr 
-400   ! Number of cells in r direction
-100   ! Number of cells in p direction
-50   ! Number of cells in l direction
-0.5   ! Courant factor (dtfac) 
-100000   ! Number of time steps 
-0.0   ! Minimum radius of the grid 
-15.0    ! Maximum radius of the grid 
-1.0      ! Minimum radius of the support of f 
-5.0     ! Maximum radius of the support of f 
--0.3    ! Minimum momentum of the support of f 
-0.5     ! Maximum momentum of the support of f 
-0.5    ! Minimum ang. momentum of the support of f 
-1.5     ! Maximum ang. momentum of the support of f 
-.false.  ! Do we discard particles outside domain? 
-1000     ! How often we discard particles 
-5000     ! Time_output 
-100  ! Spatial_output 
-test4 !directory 
-0.1      ! Amplitude of gaussian/Number of physical particles/mass
-0.0     ! Center of initial gaussian in r 
-0.0      ! Center of initial gaussian in p
-1.0      ! Center of initial gaussian in l
-0.1     ! Width of initial gaussian in r
-0.05     ! Width of initial gaussian in p
-0.1     ! Width of initial gaussian in l
-aa  ! Initial state 
-0.01      ! Cutoff percentage
-1        ! Bsplineorder 
-leapfrog ! Integrator   
-two      ! Spatial order discretization
-bg       ! Forcetype 
-Isochrone ! Background type
-.false.    ! Autointeraction
-ascii    ! Output format (ascii,hdf5)
-
+dr               = 0.03125    ! Grid spacing dr
+Nrc              = 400        ! Number of cells in r direction
+Npc              = 100        ! Number of cells in p direction
+Nlc              = 50         ! Number of cells in l direction
+courant          = 0.5        ! Courant factor (dtfac)
+Nt               = 100000     ! Number of time steps
+rmin             = 0.0        ! Minimum radius of the grid
+rmax             = 15.0       ! Maximum radius of the grid
+rminc            = 1.0        ! Minimum radius of the support of f
+rmaxc            = 5.0        ! Maximum radius of the support of f
+pminc            = -0.3       ! Minimum momentum of the support of f
+pmaxc            = 0.5        ! Maximum momentum of the support of f
+lminc            = 0.5        ! Minimum ang. momentum of the support of f
+lmaxc            = 1.5        ! Maximum ang. momentum of the support of f
+reduceparticles  = .false.    ! Do we discard particles outside domain?
+Nreduce          = 1000       ! How often we discard particles
+time_output      = 5000       ! Time_output
+spatial_output   = 100        ! Spatial_output
+directory        = test4      !directory
+a0               = 0.1        ! Amplitude of gaussian/Number of physical particles/mass
+r0               = 0.0        ! Center of initial gaussian in r
+p0               = 0.0        ! Center of initial gaussian in p
+l0               = 1.0        ! Center of initial gaussian in l
+sr               = 0.1        ! Width of initial gaussian in r
+sp               = 0.05       ! Width of initial gaussian in p
+sl               = 0.1        ! Width of initial gaussian in l
+state            = aa         ! Initial state
+cutoff           = 0.01       ! Cutoff percentage
+bsplineorder     = 1          ! Bsplineorder
+integrator       = leapfrog   ! Integrator
+spatialorder     = two        ! Spatial order discretization
+forcetype        = bg         ! Forcetype
+BGtype           = Isochrone  ! Background type
+autointeraction  = .false.    ! Autointeraction
+output_format    = ascii      ! Output format (ascii,hdf5)

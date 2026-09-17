@@ -7,6 +7,7 @@ program VP_PIC
 ! Include modules
 
   use parameters
+  use paramfile
   use arrays
   use utils
   use hdf5_io
@@ -32,9 +33,7 @@ program VP_PIC
   real(8), parameter :: yg_d1 = yg_w1,  yg_d2 = yg_w0,  yg_d3 = yg_w1 ! kick weights
 
 
-  call read_initial_param()
-
-  call test_consistency()
+  call read_parameters()
 
   call set_grid_size()
 
@@ -48,10 +47,13 @@ program VP_PIC
 ! ***   OUTPUT DIRECTORY  ***
 ! ***************************
 
-! Create output directory and copy parameter file to it.
+! Create output directory, copy the parameter file to it and write the
+! complete configuration in force (file plus command line overrides) to
+! params_usados.par, which is itself a valid input file.
 
   call system('mkdir -p '//trim(directory))
-  call system('cp input_parameters '//trim(directory))
+  call system('cp '//trim(parameter_file)//' '//trim(directory))
+  call dump_parameters()
 
   if (output_format=="hdf5") call open_hdf5_file()
 

@@ -437,7 +437,10 @@ avanza.
 
 ## Mejoras de diseño (no son bugs)
 
-- [ ] **Forma más amigable de pasar los parámetros de la simulación.**
+- [x] **Forma más amigable de pasar los parámetros de la simulación.**
+  *Hecho (MEJORAS B1):* `paramfile.f90` lee `nombre = valor` con overrides en la
+  línea de comandos, valida opciones y escribe `params_usados.par`;
+  `tools/posicional_a_par.py` convierte los archivos viejos.
   Hoy `read_initial_param` (`utils.f90`) lee `input_parameters` de
   forma puramente posicional (`read(*,*) x` sin nombres) — agregar,
   quitar o reordenar un parámetro rompe silenciosamente cualquier
@@ -449,9 +452,11 @@ avanza.
   parámetros faltantes/mal escritos con un mensaje claro en vez de
   un `read` que falla de forma críptica o lee el valor equivocado.
 
-- [ ] `test_consistency` (`utils.f90`) nunca se llama desde `main.f90`
+- [x] `test_consistency` (`utils.f90`) nunca se llama desde `main.f90`
   y referencia `lmin`/`lmax` que no existen (son `lminc`/`lmaxc`) — no
   compilaría si se descomenta tal cual.
+  *Hecho:* se corrigió y activó en `506a3df`; con B1 sus comprobaciones pasaron a
+  `validate` en `paramfile.f90` y la subrutina se eliminó.
 - [ ] Integrador `rk4` declarado como opción válida pero no
   implementado (aborta con mensaje).
 - [ ] Limpiar el código muerto/comentado en el bucle principal de

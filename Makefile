@@ -120,7 +120,7 @@ HDF5_LIBS := -L/usr/lib/x86_64-linux-gnu/hdf5/serial -Wl,-rpath,/usr/lib/x86_64-
 # Object files corresponding to Fortran modules. I separate
 # them from the rest to be sure they are compiled first.
 
-MODS = parameters.o arrays.o utils.o functions.o hdf5_io.o
+MODS = parameters.o paramfile.o arrays.o utils.o functions.o hdf5_io.o
 
 
 # This line automatically looks for all f90 files in
