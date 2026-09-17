@@ -42,8 +42,7 @@ module paramfile
       'r1', 'r2',                                                &
       'j1', 'sj1', 'sq1', 'lt1', 'slt1',                         &
       'j2', 'sj2', 'sq2', 'lt2', 'slt2',                         &
-      'bsplineorder', 'integrator', 'spatialorder',              &
-      'forcetype', 'BGtype', 'autointeraction' ]
+      'bsplineorder', 'integrator', 'BGtype', 'autointeraction' ]
 
   integer, parameter :: NPARAM = size(pname)   ! deduced, never kept in step by hand
 
@@ -235,8 +234,10 @@ module paramfile
 !   Numerical methods.
     case ('bsplineorder')    ; call get_int (value,bsplineorder,name,origin)
     case ('integrator')      ; call get_str (value,integrator,name,origin)
-    case ('spatialorder')    ; call get_str (value,spatialorder,name,origin)
-    case ('forcetype')       ; call get_str (value,forcetype,name,origin)
+!   Obsolete names still found in older input files: accepted with their only
+!   value, which had no effect, and otherwise rejected.
+    case ('spatialorder','forcetype')
+       call obsolete(lower(name),value,origin)
     case ('bgtype')          ; call get_str (value,BGtype,name,origin)
     case ('autointeraction') ; call get_log (value,autointeraction,name,origin)
 
@@ -383,8 +384,6 @@ module paramfile
     call check_option(state,'state','gaussian1 aa aa_quad checkpoint')
     call check_option(integrator,'integrator','euler leapfrog yoshida4 analytic')
     call check_option(dt_switch,'dt_switch','fix var')
-    call check_option(spatialorder,'spatialorder','two four')
-    call check_option(forcetype,'forcetype','bg')
     call check_option(BGtype,'BGtype','null sphere Isochrone Central iso isotrun nfw burkert')
 
     if (rmin < 0.0d0)   call fail('rmin must be greater than or equal to zero.')
@@ -433,6 +432,34 @@ module paramfile
 
 !> Check a parameter against a blank-separated list of valid values, and
 !! print that list if it does not match.
+
+!> A name that no longer does anything: accepted with the value it always
+!! had ("two" for spatialorder, "bg" for forcetype), rejected otherwise.
+
+  subroutine obsolete(name,rawvalue,origin)
+
+    implicit none
+
+    character(*), intent(in) :: name,rawvalue,origin
+    character(256) :: value
+    character(8) :: expected
+
+    value = adjustl(rawvalue)
+    call strip_quotes(value)
+    if (name == 'spatialorder') then
+       expected = 'two'
+    else
+       expected = 'bg'
+    end if
+    if (trim(value) /= trim(expected)) then
+       print *
+       print *, trim(origin),': "',trim(name),'" is obsolete and only "',trim(expected),'" was ever valid.'
+       call stop_run
+    end if
+    print *, trim(origin),': "',trim(name),'" is obsolete and ignored.'
+
+  end subroutine obsolete
+
 
   subroutine check_option(value,name,options)
 
@@ -610,8 +637,6 @@ module paramfile
     write(u,'(a)') '# Numerical methods'
     call put_i(u,'bsplineorder',bsplineorder)
     call put_s(u,'integrator',integrator)
-    call put_s(u,'spatialorder',spatialorder)
-    call put_s(u,'forcetype',forcetype)
     call put_s(u,'BGtype',BGtype)
     call put_l(u,'autointeraction',autointeraction)
 

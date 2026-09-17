@@ -91,8 +91,8 @@ subroutine density
   end do
 
 
-  rho = factor*m0*rho/r**2
-  avg_rho = factor*m0*avg_rho/r**2
+  rho = factor*rho/r**2
+  avg_rho = factor*avg_rho/r**2
 
 ! With self-gravity, Poisson only sees the mass on the grid. Report, once,
 ! when part of it has left.
@@ -203,6 +203,6 @@ subroutine avg_density
       avg_rho(1-i) = avg_rho(i)
   end do
 
-  avg_rho = factor*m0*avg_rho
+  avg_rho = factor*avg_rho
 
 end subroutine avg_density

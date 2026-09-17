@@ -16,8 +16,6 @@ module parameters
    integer   :: Nlc= 20                  !< Number of cells used in l in the support of f
 
    real(8)   :: dr = 0.1D0               !< Grid spacing in the r direction
-   real(8)   :: dp = 0.1D0               !< Grid spacing in the p direction
-   real(8)   :: dl = 0.1D0               !< Grid spacing in the l direction
 
    real(8)   :: drc = 0.1D0              !< Size of the cell in r direction
    real(8)   :: dpc = 0.1D0              !< Size of the cell in p direction
@@ -50,14 +48,10 @@ module parameters
    real(8)   :: t = 0.0D0                 !< Time
    character(20) :: dt_switch = "fix"     !< Time step fixed from the initial force, or recomputed every step (fix,var)
 
-   !Gravitational potentials
-!    real(8)   :: rhoc = 1.0D0              !< Density parameter for gravitational potential
-!    real(8)   :: rc = 1.0D0                !< Radius parameter for gravitational potential
 
     !Parameters for the Initial States
 
 
-   real(8)   :: m0 = 1.0D0                !< Mass of the particles
    character(10) :: state = "gaussian1"   !< Initial distribution (gaussian1,aa,aa_quad,checkpoint)
 
    !Gaussian distribution
@@ -82,14 +76,10 @@ module parameters
    integer        :: spatial_output = 10000 !< Spatial output
    integer        :: time_output = 10000    !< Time output
    integer        :: field_output = 0       !< How often to save particles and grid fields (<=0: every spatial_output)
-   integer        :: time_reduce_arr = 10000!< Reduce array size every
-   character(20)  :: conv_test = "off"      !< Convergence test switch (on,off)
 
    !Methods
    integer        :: bsplineorder = 1     !< B-spline order
    character(20)  :: integrator = "euler"   !< Time integrator (euler,leapfrog,yoshida4,analytic)
-   character(20)  :: spatialorder = "two"        !< Spatial order of discretization.
-   character(20)  :: forcetype = "bg"     !< Background force (bg). Self-gravity: autointeraction; no background: BGtype=null
    character(20)  :: BGtype = "sphere"    !< Type of background. When the gravitational force is fix (sphere,iso,isotrun,nfw,burkert)
    logical        :: autointeraction = .false. !< Self interaction of particles
    !Energy variables

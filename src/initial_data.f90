@@ -129,10 +129,6 @@
 
             J3 = 1.d0/sqrt(-2.d0*energy)-0.5d0*(laux+sqrt(laux**2+4.d0))
 
-            !w3 = 8.0D0/(laux+2.0D0*J3+sqrt(laux**2+4.0D0))**3
-
-            Q3 = Q3
-
             f(indx) = exp(-sin(0.5d0*Q3)**2/sp**2)*exp(-J3**2/sr**2)*J3**2*exp(-(laux-l0)**2/sl**2)
 
             if (f(indx) /= f(indx) ) then

@@ -40,14 +40,13 @@ module utils
 
 ! Find the number of ghost zones
 
+! Two ghost points at the origin reach the support of the widest weight
+! function (order 3, two grid spacings on each side).
+
   if (rmin>0.d0) then
     ghost = 0
-  else if (rmin == 0.d0) then
-    if (spatialorder == "two") then
-        ghost = 2
-    else if (spatialorder == "four") then
-        ghost = 3
-    end if
+  else
+    ghost = 2
   end if
 
 ! Find the number of particles
@@ -117,18 +116,12 @@ module utils
 ! Integrates density, current and continuity equation.
 
   allocate(rho   (1-ghost:Nr))
-  allocate(rho_p (1-ghost:Nr))
   allocate(avg_rho (1-ghost:Nr))
   allocate(curr  (1-ghost:Nr))
-  allocate(curr_p(1-ghost:Nr))
-  allocate(cont  (1-ghost:Nr))
 
   rho    = 0.0d0
-  rho_p  = 0.0d0
   avg_rho= 0.0d0
   curr   = 0.0d0
-  curr_p = 0.0d0
-  cont   = 0.0d0
 
   end subroutine alloc_mem_set0
 
@@ -170,11 +163,8 @@ module utils
   deallocate(f)
 
   deallocate(rho)
-  deallocate(rho_p)
   deallocate(avg_rho)
   deallocate(curr)
-  deallocate(curr_p)
-  deallocate(cont)
 
   print *, "Memory deallocated"
 
@@ -205,13 +195,6 @@ subroutine construct_grid
   end do
       
   end if
-
-! Position in direction p. Notice that the grid in the
-! p direction will always cover the region (-pmax,pmax).
-
-!  do j=0,Np
-!     p(j) = pmin + dble(j) *dp
-!  end do
 
 
 end subroutine construct_grid
@@ -605,82 +588,6 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
   end subroutine save2Ddata_particles
 
-  subroutine save3Ddata_particles(directory,filename,Npart,t,r_part,p_part,l_part,var)
-
-! **********************
-! ***   SAVE2DDATA   ***
-! **********************
-
-! This subroutine saves 2D data to files.
-
-  implicit none
-
-  integer i
-  integer Npart
-
-  real(8) t
-
-  real(8), dimension(1:Npart) :: r_part
-  real(8), dimension(1:Npart) :: p_part
-  real(8), dimension(1:Npart) :: l_part
-
-  real(8), dimension(1:Npart) :: var
-
-  character(*) :: directory,filename
-  character(20) :: filestatus
-
-
-! ***************************
-! ***   OPEN DATA FILES   ***
-! ***************************
-
-! Is this the first time step?
-
-  if (t==0) then
-     filestatus = 'replace'
-  else
-     filestatus = 'old'
-  end if
-
-! Open files.
-
-  if (filestatus=='replace') then
-     open(101,file=trim(directory)//'/'//trim(filename)//'.2D',form='formatted',status=filestatus)
-
-  else
-     open(101,file=trim(directory)//'/'//trim(filename)//'.2D',form='formatted',status=filestatus,position='append')
-  end if
-
-
-! ************************
-! ***   SAVE 2D DATA   ***
-! ************************
-
-  write(101,"(A8,ES14.6)") '#Time = ',t
-
-  do i=1,Npart
-    if (dabs(var(i)).gt.1.0D-50) then
-      write(101,"(4ES16.8)") r_part(i),p_part(i),l_part(i),var(i)
-    else
-      write(101,"(4ES16.8)") r_part(i),p_part(i),l_part(i),0.0D0
-    end if
-  end do
-
-  write (101,*)
-  write (101,*)
-
-
-! ****************************
-! ***   CLOSE DATA FILES   ***
-! ****************************
-
-  close(101)
-
-! ***************
-! ***   END   ***
-! ***************
-
-  end subroutine save3Ddata_particles
 
 
   subroutine save_energy(directory,filename,t,kinetic,potential,energy)
@@ -742,153 +649,8 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
 
 
-  subroutine save_dens_current(directory,filename,Nr,Np,t,r,density,current,error)
-
-! ************************************************
-! ***   SAVE DENSITY, CURRENT AND ERROR DATA   ***
-! ************************************************
-
-! This subroutine saves the density, current and error in the
-! continuity equation.
-
-  implicit none
-
-  integer i
-  integer Nr,Np
-
-  real(8) t
-
-  real(8), dimension(0:Nr) :: r,density,current,error
-
-  character(*) :: directory,filename
-  character(20) :: filestatus
 
 
-! **************************
-! ***   OPEN DATA FILE   ***
-! **************************
-
-! Is this the first time step?
-
-  if (t==0) then
-     filestatus = 'replace'
-  else
-     filestatus = 'old'
-  end if
-
-! Open file.
-
-  if (filestatus=='replace') then
-     open(101,file=trim(directory)//'/'//trim(filename)//'.rl',form='formatted',status=filestatus)
-  else
-     open(101,file=trim(directory)//'/'//trim(filename)//'.rl',form='formatted',status=filestatus,position='append')
-  end if
-
-
-! *********************
-! ***   SAVE DATA   ***
-! *********************
-
-  density = density + 1.0D-50
-  current = current + 1.0D-50
-  error   = error   + 1.0D-50
-
-  write(101,"(A8,ES14.6)") '#Time = ',t
-
-  do i=0,Nr
-     write(101,"(4ES16.8)") r(i),density(i),current(i),error(i)
-  end do
-
-  write (101,*)
-  write (101,*)
-
-
-! ***************************
-! ***   CLOSE DATA FILE   ***
-! ***************************
-
-  close(101)
-
-
-! ***************
-! ***   END   ***
-! ***************
-
-  end subroutine save_dens_current
-
-
-  subroutine save_force_pot(directory,filename,Nr,Np,t,r,force,pot)
-
-! *****************************************
-! ***   SAVE FORCE AND POTENTIAL DATA   ***
-! *****************************************
-
-! This subroutine saves the force and potential data for the
-! self gravitating case
-
-  implicit none
-
-  integer i
-  integer Nr,Np
-
-  real(8) t
-
-  real(8), dimension(0:Nr) :: r,force,pot
-
-  character(*) :: directory,filename
-  character(20) :: filestatus
-
-
-! **************************
-! ***   OPEN DATA FILE   ***
-! **************************
-
-! Is this the first time step?
-
-  if (t==0) then
-     filestatus = 'replace'
-  else
-     filestatus = 'old'
-  end if
-
-! Open file.
-
-  if (filestatus=='replace') then
-     open(101,file=trim(directory)//'/'//trim(filename)//'.rl',form='formatted',status=filestatus)
-  else
-     open(101,file=trim(directory)//'/'//trim(filename)//'.rl',form='formatted',status=filestatus,position='append')
-  end if
-
-
-! *********************
-! ***   SAVE DATA   ***
-! *********************
-
-  force = force + 1.0D-50
-  pot   = pot   + 1.0D-50
-
-  write(101,"(A8,ES14.6)") '#Time = ',t
-
-  do i=0,Nr
-     write(101,"(3ES16.8)") r(i),force(i),pot(i)
-  end do
-
-  write (101,*)
-  write (101,*)
-
-
-! ***************************
-! ***   CLOSE DATA FILE   ***
-! ***************************
-
-  close(101)
-
-
-! ***************
-! ***   END   ***
-! ***************
-
-  end subroutine save_force_pot
 
 
 subroutine reduce_arrays
