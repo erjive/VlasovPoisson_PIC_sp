@@ -283,6 +283,13 @@ avanza.
     numérico; con eps=0.1, 0.04936 en t=0 frente a (a_1/a_0)·eps/2=0.0494
     esperado (isócrono: 0.0545).
 
+- [x] **Rutas de HDF5 fijas a Debian/Ubuntu** (MEJORAS B5). El Makefile
+  compila a través de `h5fc` si está en el camino y envuelve el
+  compilador elegido; `make HDF5_WRAPPER=` usa las rutas explícitas.
+  Verificado: sin wrapper el binario es idéntico byte a byte al anterior;
+  con wrapper (aquí enlaza HDF5 estático, 3.8 MB) t1/t2/t3 idénticos y
+  los 338 datasets y atributos de una salida HDF5 idénticos.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

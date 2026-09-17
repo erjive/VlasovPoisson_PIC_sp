@@ -101,8 +101,30 @@ $(error $(newline)Makefile error: Unknown FORTRAN compiler: $(FC))
 endif
 endif
 
-# Fortran Compiler
-FF := $(FC)
+# Fortran Compiler.
+#
+# HDF5 installs a wrapper, h5fc, that calls the compiler with the include and
+# library flags of that particular installation. Those paths differ on every
+# distribution and on macOS, so compiling through the wrapper makes this
+# Makefile work outside Debian/Ubuntu. It is used only if it is on the path
+# and wraps the compiler selected above; otherwise the explicit HDF5_INC and
+# HDF5_LIBS below apply. "make HDF5_WRAPPER=" ignores it.
+
+ifeq ($(origin HDF5_WRAPPER),undefined)
+  HDF5_WRAPPER := $(shell command -v h5fc 2>/dev/null)
+  ifneq ($(HDF5_WRAPPER),)
+    WRAPPED := $(notdir $(shell $(HDF5_WRAPPER) -show 2>/dev/null | awk '{print $$1}'))
+    ifneq ($(WRAPPED),$(notdir $(FC)))
+      HDF5_WRAPPER :=
+    endif
+  endif
+endif
+
+ifeq ($(HDF5_WRAPPER),)
+  FF := $(FC)
+else
+  FF := $(HDF5_WRAPPER)
+endif
 
 
 # HDF5 (Fortran bindings, serial build).  Paths as reported by
@@ -112,9 +134,15 @@ FF := $(FC)
 # non-standard library location into the executable so it runs
 # without needing LD_LIBRARY_PATH set.
 
+ifeq ($(HDF5_WRAPPER),)
 HDF5_INC  := -I/usr/include/hdf5/serial
 HDF5_LIBS := -L/usr/lib/x86_64-linux-gnu/hdf5/serial -Wl,-rpath,/usr/lib/x86_64-linux-gnu/hdf5/serial \
              -lhdf5hl_fortran -lhdf5_hl -lhdf5_fortran -lhdf5
+else
+# The wrapper supplies both.
+HDF5_INC  :=
+HDF5_LIBS :=
+endif
 
 
 # Object files corresponding to Fortran modules. I separate
@@ -171,7 +199,7 @@ hello :
 	@ echo "****************************"
 	@ echo
 	@ echo $(WW)
-	@ echo "FORTRAN COMPILER =" $(FC)
+	@ echo "FORTRAN COMPILER =" $(FF) "  (flags for $(FC))"
 	@ echo
 
 # Create subdirectories objs and exe.
