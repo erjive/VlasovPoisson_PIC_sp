@@ -4,6 +4,42 @@ Encontrados en la revisión de código de la rama `fix/bugs-mejoras`. Un
 commit por ítem resuelto; esta lista se va tachando a medida que se
 avanza.
 
+
+## Estado al 2026-09-17 y lo que hace falta
+
+Rama `mejoras/portar` (en GitHub). Hecho, con su verificación más abajo:
+todas las mejoras de `MEJORAS.md`; la auditoría de errores y líneas ad hoc; la
+revisión de consistencia con las ecuaciones del método PIC (depósito con imagen y
+volumen de W_n, interpolación con nodos espejo y solución exterior, reflexión de la
+fuerza, fuerza tras `reduce_arrays`, energía cinética con L²/2r², nodos en punto
+medio, código muerto); `reproducir/` y las notas `docs/introduccion/vlasov_L_intro.tex`
+actualizadas con el código corregido.
+
+Hace falta:
+
+- [ ] **Repetir las corridas del artículo** (`exe/input_parameters`,
+  `exe/input_article_*`, borrador `Vlasov_Poisson_evolutions/main.md`). El código
+  corregido no las reproduce bit a bit: nodos en punto medio en `aa`/`gaussian1`,
+  depósito y volumen de celda distintos, energía cinética redefinida. Las figuras y
+  la tabla "mixed yes/no" del borrador son del código anterior.
+- [ ] **Misma revisión en `vlasov-poisson_PIC` (L fija).** Tiene las mismas fallas:
+  interpolación sin nodos espejo (`poisson_rk.f90`, `jlo = max(1,...)`), volumen de
+  NGP con depósito W_n (`density.f90`), sin cambio de signo de la fuerza al reflejar
+  (`main.f90`) y `reduce_arrays` sin recalcular la fuerza. Con L0=2 las partículas
+  quedan en r≳2.6, así que el efecto esperado en sus resultados (meseta, Landau) es
+  del orden de dr²/12r²~1e-4 en la fuerza propia; hay que medirlo antes de decirlo.
+- [ ] **Paso de tiempo con fundamento.** `pmax` (2 por omisión) y el criterio de
+  aceleración no conocen la frecuencia orbital; con el |p| de las partículas, nfw
+  divergió. Opciones: un criterio con |dF/dr| por partícula, o fijar dt por prueba de
+  convergencia en cada estudio (lo que se hizo con L fija).
+- [ ] **h_k verdadero en línea.** `analysis` en Fortran usa el mapa del isócrono;
+  el mapa numérico solo existe en postproceso (`tools/hk_numerico.py`).
+- [ ] **Preguntas de investigación P1–P6** de las notas (sección 13): Landau en
+  F(J,L) frente a σ_L, teoría lineal con L, criterio del mapa del isócrono, piso de
+  ruido con autogravedad, régimen no lineal.
+- [ ] `build_cell_list` sigue serial; el depósito de salida `rho` duplica a `avg_rho`.
+- [ ] Unir `mejoras/portar` con `main` cuando se decida.
+
 ## Resueltos
 
 - [x] **Makefile: `FLAGS` vacío para gfortran.** Todas las líneas de
