@@ -30,7 +30,7 @@ module paramfile
 !! suggest the intended one when a name is misspelled, so it must list
 !! exactly the names handled by assign_param below.
   character(16), parameter :: pname(*) = [ character(16) :: &
-      'dr', 'Nrc', 'Npc', 'Nlc', 'courant', 'Nt',                &
+      'dr', 'Nrc', 'Npc', 'Nlc', 'courant', 'dt_switch', 'Nt',   &
       'rmin', 'rmax', 'rminc', 'rmaxc', 'pminc', 'pmaxc',        &
       'lminc', 'lmaxc', 'pmax',                                  &
       'reduceparticles', 'Nreduce',                              &
@@ -183,6 +183,7 @@ module paramfile
 
 !   Time.
     case ('courant')         ; call get_real(value,courant,name,origin)
+    case ('dt_switch')       ; call get_str (value,dt_switch,name,origin)
     case ('nt')              ; call get_int (value,Nt,name,origin)
 
 !   Particle bookkeeping.
@@ -358,6 +359,7 @@ module paramfile
     call check_option(output_format,'output_format','ascii hdf5')
     call check_option(state,'state','gaussian1 aa Plummer compact compact2')
     call check_option(integrator,'integrator','euler leapfrog yoshida4 rk4')
+    call check_option(dt_switch,'dt_switch','fix var')
     call check_option(spatialorder,'spatialorder','two four')
     call check_option(forcetype,'forcetype','bg self')
     call check_option(BGtype,'BGtype','null sphere Isochrone Central iso isotrun nfw burkert')
@@ -490,6 +492,7 @@ module paramfile
     call put_i(u,'Npc',Npc)
     call put_i(u,'Nlc',Nlc)
     call put_r(u,'courant',courant)
+    call put_s(u,'dt_switch',dt_switch)
     call put_i(u,'Nt',Nt)
 
     write(u,'(a)') ''

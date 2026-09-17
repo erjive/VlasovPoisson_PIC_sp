@@ -294,24 +294,19 @@ program VP_PIC
 !    ***   ADAPT TIME STEP   ***
 !    ***************************
 
-!    For the self-gravitating case the force can change with time
-!    (e.g. it grows as the cloud collapses, see the "compactness"
-!    runs in the article), so the time step needs to adapt -- it was
-!    otherwise only ever computed once, from the *initial* force,
-!    before the main loop even starts.  Notice that the time step can
-!    go up and down in response to the size of the force.  This uses
-!    force_part right after grav_force() was called for the new
-!    r_part above, so Fmax reflects the force at the position the
-!    particles were just moved to, and the resulting dt is the one
-!    used to advance the *next* step.
+!    By default (dt_switch="fix") the time step computed from the initial
+!    force before the loop is kept for the whole run. A step that changes
+!    from one step to the next breaks the symplectic character of leapfrog
+!    and yoshida4: the energy error stops being bounded. For the phase
+!    mixing runs the results did not depend on dt between 0.05 and 0.2 with
+!    a fixed step (vlasov-poisson_PIC, notes section 9), so choose dt with
+!    such a test instead of adapting it.
 !
-!    This was originally guarded by forcetype=="self", but forcetype
-!    never actually gets set to "self" anywhere meaningful (see the
-!    "forcetype=self is a no-op" item in BUGS_TODO.md) -- the flag
-!    that actually controls whether the force can change over time is
-!    autointeraction.
+!    dt_switch="var" recomputes dt from the force at the new positions,
+!    for runs where the force grows a lot (e.g. a collapsing cloud). The
+!    new dt is used to advance the next step.
 
-     if (autointeraction) then
+     if (dt_switch == "var") then
        call set_timestep()
      end if
 

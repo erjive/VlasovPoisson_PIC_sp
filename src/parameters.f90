@@ -46,7 +46,7 @@ module parameters
    integer   :: Nt = 1000000              !< Total number of time steps
    real(8)   :: dt = 0.1D0                !< Time step
    real(8)   :: t = 0.0D0                 !< Time
-   character(20) :: dt_switch = "fix"     !< Time step fix or variable (fix,var)
+   character(20) :: dt_switch = "fix"     !< Time step fixed from the initial force, or recomputed every step (fix,var)
 
    !Gravitational potentials
 !    real(8)   :: rhoc = 1.0D0              !< Density parameter for gravitational potential

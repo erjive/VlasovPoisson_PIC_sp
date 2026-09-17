@@ -119,6 +119,16 @@ avanza.
   propio (bug de A9, sin corregir aquí), así que ahí la energía resta
   ½·potself sin haberlo sumado.
 
+- [x] **El paso de tiempo se readaptaba en cada paso con autogravedad**
+  (MEJORAS A8). Un paso variable rompe el carácter simpléctico de
+  leapfrog/yoshida4. Ahora el paso se fija con la fuerza inicial
+  (`dt_switch=fix`, valor por omisión) y solo se recalcula con
+  `dt_switch=var`. Verificado: t1/t2/t3 idénticos bit a bit (ahí dt
+  nunca cambiaba: manda el límite de Courant); con `pmax=0.01 Nrc=400`
+  (manda el criterio de fuerza), `var` reproduce bit a bit el binario
+  anterior (dt entre 0.570 y 0.982 por bloque) y `fix` mantiene
+  dt=0.53768.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
