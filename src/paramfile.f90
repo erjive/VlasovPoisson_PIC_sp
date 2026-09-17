@@ -377,7 +377,7 @@ module paramfile
 
     call check_option(output_format,'output_format','ascii hdf5')
     call check_option(state,'state','gaussian1 aa aa_quad checkpoint')
-    call check_option(integrator,'integrator','euler leapfrog yoshida4 rk4')
+    call check_option(integrator,'integrator','euler leapfrog yoshida4 analytic rk4')
     call check_option(dt_switch,'dt_switch','fix var')
     call check_option(spatialorder,'spatialorder','two four')
     call check_option(forcetype,'forcetype','bg')

@@ -146,6 +146,10 @@ module utils
   !! never allocated is a runtime error, not a no-op.
   subroutine deallocate_mem
 
+! q0_part/j0_part exist only for integrator="analytic".
+  if (allocated(q0_part)) deallocate(q0_part)
+  if (allocated(j0_part)) deallocate(j0_part)
+
   deallocate(r_part)
   deallocate(r_part_p)
   deallocate(p_part)
@@ -1041,6 +1045,86 @@ end subroutine reduce_arrays
     end if
 
   end subroutine invert_QJ_to_rp
+
+  !> Store each particle's initial angle and radial action, for
+  !! integrator="analytic". Uses the same forward map as analysish.f90, so
+  !! it works from any initial state; unbound particles have no actions and
+  !! stop the run.
+  subroutine init_action_angle
+
+    implicit none
+
+    integer :: i,nunbound
+    real(8) :: en,er1,er2,s1,s2,ss,argaux,eta,smallpi
+
+    smallpi = acos(-1.0d0)
+
+    allocate(q0_part(1:Npart))
+    allocate(j0_part(1:Npart))
+
+    nunbound = 0
+
+    !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(en,er1,er2,s1,s2,ss,argaux,eta) REDUCTION(+:nunbound)
+    do i=1,Npart
+      en = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part(i)**2)) + 0.5d0*l_part(i)**2/(r_part(i)**2) + 0.5D0*p_part(i)**2
+      if (en >= 0.0d0) then
+        nunbound = nunbound + 1
+        q0_part(i) = 0.0d0
+        j0_part(i) = 0.0d0
+        cycle
+      end if
+      er1 = dsqrt((1.d0+en*(2.d0+l_part(i)**2)-dsqrt(1.d0+2.d0*en*(2.d0+2.d0*en+l_part(i)**2)))/(2.d0*en**2))
+      er2 = dsqrt((1.d0+en*(2.d0+l_part(i)**2)+dsqrt(1.d0+2.d0*en*(2.d0+2.d0*en+l_part(i)**2)))/(2.d0*en**2))
+      s1 = 1.d0 + dsqrt(1.d0+er1**2)
+      s2 = 1.d0 + dsqrt(1.d0+er2**2)
+      ss = 1.d0 + dsqrt(1.d0+r_part(i)**2)
+      argaux = (s1+s2-2.0d0*ss)/(s2-s1)
+      if (p_part(i)>=0.d0) then
+        eta = dacos(sign(min(abs(argaux),1.0D0),argaux))
+      else
+        eta = dacos(-sign(min(abs(argaux),1.0D0),argaux))+smallpi
+      end if
+      q0_part(i) = eta - dsqrt((-2.d0*en)**3)*sqrt(max(-l_part(i)**2-2.d0*en-2.d0-0.5D0/en,0.0d0))/(-2.d0*en)*dsin(eta)
+      j0_part(i) = 1.d0/dsqrt(-2.d0*en)-0.5d0*(l_part(i)+dsqrt(l_part(i)**2+4.d0))
+    end do
+    !$OMP END PARALLEL DO
+
+    if (nunbound > 0) then
+      print *
+      print *, 'integrator="analytic": ',nunbound,' particles are unbound (E >= 0)'
+      print *, 'and have no angle-action variables.'
+      print *, 'Aborting ...'
+      print *
+      stop 1
+    end if
+
+  end subroutine init_action_angle
+
+
+  !> Advance every particle analytically to the absolute time "tnow".
+  !!
+  !! Without self-gravity, in the isochrone, J and L are conserved and the
+  !! angle advances linearly, Q(t) = Q(0) + omega(J,L) t, with
+  !! omega = 1/(J+c)**3 and c = (L+sqrt(L**2+4))/2. The state is recovered
+  !! by inverting (Q,J) back to (r,p_r). Exact at any t, so it carries no
+  !! phase error and is the reference for the symplectic integrators.
+  subroutine advance_analytic(tnow)
+
+    implicit none
+
+    real(8), intent(in) :: tnow
+    integer :: i
+    real(8) :: om,Qt
+
+    !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(om,Qt)
+    do i=1,Npart
+      om = 1.0d0/(j0_part(i)+0.5d0*(l_part(i)+sqrt(l_part(i)**2+4.d0)))**3
+      Qt = q0_part(i) + om*tnow
+      call invert_QJ_to_rp(Qt,j0_part(i),l_part(i),r_part(i),p_part(i))
+    end do
+    !$OMP END PARALLEL DO
+
+  end subroutine advance_analytic
 
 end module utils
 

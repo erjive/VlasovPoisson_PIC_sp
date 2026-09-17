@@ -209,6 +209,14 @@ avanza.
   fuerza: r, p ≤1.2e-14, h_k ≤4.2e-14. Archivos con menos o más líneas
   terminan con código 1.
 
+- [x] **Integrador `analytic`** (MEJORAS C3). Avance exacto
+  Q = Q0 + ω(J,L) t con J y L por partícula e inversión
+  `invert_QJ_to_rp`; solo sin autogravedad, isócrono y eps=0, sin
+  `reduceparticles`, y aborta si hay partículas no ligadas. Verificado
+  con `aa_quad` (N_J=200, N_Q=40, N_L=16, t≤200): h_k frente a la suma
+  discreta exacta ≤2.9e-12 (3.5e-14 en k=0); yoshida4 (dt=0.025) frente
+  a analytic 1.2e-11–2.6e-11, que es el error del integrador.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

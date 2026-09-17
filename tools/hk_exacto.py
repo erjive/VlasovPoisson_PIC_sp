@@ -100,8 +100,12 @@ def main():
         sys.exit('solo para state=aa_quad sin autogravedad')
     if raw['bgtype'] != 'Isochrone':
         sys.exit('solo para BGtype=Isochrone')
-    P = {k: float(v) for k, v in raw.items() if k not in ('state', 'directory', 'output_format', 'integrator',
-         'spatialorder', 'forcetype', 'bgtype', 'autointeraction', 'reduceparticles', 'dt_switch')}
+    P = {}
+    for k, v in raw.items():
+        try:
+            P[k] = float(v)
+        except ValueError:
+            pass
     for k in ('nrc', 'npc', 'nlc'):
         P[k] = int(P[k])
     if raw['cutoff'] not in ('0', '0.0'):

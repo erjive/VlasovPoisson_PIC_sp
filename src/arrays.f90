@@ -28,6 +28,7 @@
   real(8), allocatable, dimension(:) :: pot_part   ! Potential valuated at the position particle
   real(8), allocatable, dimension(:) :: potself_part ! Self-gravity part of pot_part (zero without autointeraction)
   real(8), allocatable, dimension(:) :: force_part ! Force applied to the particle.
+  real(8), allocatable, dimension(:) :: q0_part, j0_part ! Initial angle and radial action (integrator analytic only)
 
 
 ! The density function f and the fluxes are 2D arrays.

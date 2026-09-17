@@ -43,6 +43,35 @@ program VP_PIC
 
   call initial_data()
 
+! integrator="analytic" advances each particle with the closed-form solution
+! Q(t) = Q(0) + omega(J,L) t, valid only where J and L are exact constants
+! of motion: static isochrone background, no self-gravity, and eps = 0,
+! since the angle-action map is built from the unsoftened L**2/(2 r**2).
+
+  if (integrator == 'analytic') then
+
+     if (autointeraction .or. BGtype /= "Isochrone" .or. eps /= 0.0d0) then
+        print *
+        print *, 'integrator="analytic" requires an integrable setup:'
+        print *, '  autointeraction = .false.,  BGtype = "Isochrone",  eps = 0.'
+        print *, 'Aborting ...'
+        print *
+        stop 1
+     end if
+
+!    reduce_arrays resizes the particle arrays but not q0_part/j0_part.
+     if (reduceparticles) then
+        print *
+        print *, 'integrator="analytic" is incompatible with reduceparticles=.true.'
+        print *, 'Aborting ...'
+        print *
+        stop 1
+     end if
+
+     call init_action_angle()
+
+  end if
+
 ! ***************************
 ! ***   OUTPUT DIRECTORY  ***
 ! ***************************
@@ -178,6 +207,13 @@ program VP_PIC
 
       r_part = r_part + yg_c4*dt*p_part
       call grav_force()
+
+!    Exact advance in angle-action variables (no self-gravity only).
+
+     else if (integrator == 'analytic') then
+
+       call advance_analytic(t)
+       call grav_force()
 
 !    Fourth order Runge-Kutta.
 
