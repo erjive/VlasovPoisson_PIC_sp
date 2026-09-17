@@ -17,7 +17,11 @@
     real(8) :: eta
     real(8) :: smallpi
 
-    integer, parameter :: nquad = 20          !Simpson intervals for the angular integral (must be even)
+!   Simpson intervals for the angular integral (must be even). With sp=0.1
+!   A(Q) is narrow and 20 intervals gave a_k with relative errors of
+!   1.2e-2 (k=0) to 3.2e-2 (k=4); 512 give <= 2.2e-16 against the closed
+!   form a_k = exp(-x) I_k(x), x = 1/(2 sp**2). It is evaluated once per run.
+    integer, parameter :: nquad = 512
     real(8) :: quadQ(0:nquad),quadW(0:nquad)  !Quadrature nodes/weights on [0,pi]
     real(8) :: hstep
     real(8), save :: ak(0:4)                  !Angular coefficients a_k, constant for the whole run

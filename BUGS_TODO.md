@@ -138,6 +138,14 @@ avanza.
   bit; h_k(t=0) de t3 coincide a 1e-15 con un cálculo independiente en
   Python sobre las 772 partículas ligadas.
 
+- [x] **Cuadratura angular de h_k imprecisa** (MEJORAS A5, con C1).
+  Simpson con 20 intervalos y sp=0.1 daba a_k con errores relativos de
+  1.24e-2 (k=0) a 3.15e-2 (k=4) frente a la forma cerrada
+  a_k = e^{-x} I_k(x), x=1/(2 sp²); con 512, ≤2.2e-16. Verificado: en
+  t1/t2/t3, h_k(512)/h_k(20) es en cada fila la constante predicha
+  a_k(512)/a_k(20) (1.01253 … 1.03249) hasta los 12 decimales de la
+  predicción; las demás salidas, idénticas bit a bit.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
