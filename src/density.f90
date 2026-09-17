@@ -23,7 +23,8 @@ subroutine density
   implicit none
 
   integer i,j
-  real(8) :: smallpi,factor,average_rho
+  real(8) :: smallpi,factor,average_rho,outside
+  logical, save :: warned = .false.
   real(8) :: cutoff_rho,cutoff_avg
   integer :: Wcell,c,clo,chi,pp
   integer, allocatable :: cell_start(:),particle_order(:)
@@ -92,6 +93,23 @@ subroutine density
 
   rho = factor*m0*rho/r**2
   avg_rho = factor*m0*avg_rho/r**2
+
+! With self-gravity, Poisson only sees the mass on the grid. Report, once,
+! when part of it has left.
+
+  if (autointeraction .and. .not. warned) then
+    outside = 0.0D0
+    do j=1,Npart
+      if (r_part(j) > r(Nr)) outside = outside + f(j)*l_part(j)
+    end do
+    if (outside > 0.0D0) then
+      print *
+      print *, 'WARNING: at t = ',t,' a fraction ',outside/sum(f*l_part), &
+               ' of the mass is beyond r = ',r(Nr)
+      print *, '         and does not enter the Poisson equation.'
+      warned = .true.
+    end if
+  end if
 
 ! Mean density in the shell r1 <= r <= r2, written to vlasov_rhomix.tl: the
 ! mass of the particles inside, 8 pi**2 drc dpc dlc Sum f L, over the volume

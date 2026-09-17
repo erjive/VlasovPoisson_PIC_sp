@@ -323,6 +323,54 @@ avanza.
   y bsplineorder 2, king con analytic, nfw, el caso que cruza el origen y
   `checkpoint` del equilibrio con autogravedad.
 
+## Auditoría (después de portar las mejoras)
+
+Revisión del código completo buscando errores y líneas ad hoc. Corregido, cada uno
+verificado:
+
+- [x] **`vlasov_rhomix.tl` no era una densidad** (`90ff2fa`). Sumaba
+  f/(4π(r2²-r1²)) sin el peso L ni el volumen de celda: con t3 y la
+  cáscara 4≤r≤6 daba 23.5 veces la densidad media con Nlc=4 y 94.8 con
+  Nlc=16. Ahora es la masa de la cáscara entre su volumen; coincide con
+  Python a 3.7e-9 y no depende de Nlc.
+- [x] **`directory` y `checkpointfile` limitados a 100 caracteres**
+  (`fix(parameters)`): una ruta absoluta en un directorio temporal ya no
+  cabía. Ahora 256, como el archivo de parámetros; probado con 202.
+- [x] **Avisos que no cambian resultados**: partículas con |p| > `pmax`
+  (el límite de Courant usa el parámetro `pmax`, no los momentos
+  reales); `BGtype` distinto de Isochrone (h_k y los estados `aa`,
+  `aa_quad` usan las variables del isócrono); masa que sale de la malla
+  de Poisson con autogravedad (se avisa una vez con la fracción: t3 la
+  tiene desde t=50, 1.8e-4). Salidas idénticas bit a bit.
+
+Encontrado y documentado, sin cambiar (cambiaría corridas existentes o no
+afecta resultados):
+
+- [ ] **Nodos en el borde derecho de la celda en `aa` y `gaussian1`**
+  (r = rminc + i drc, L = lminc + k dlc). En L, donde el soporte está
+  truncado, la regla es de primer orden y sesga ⟨L⟩ en +dlc/2·(…): con
+  L∈[1.6,2.4], sl=0.2, ⟨L⟩ = 2.00208 con N_L=8 y 2.00104 con 16 (punto
+  medio: 2.00000); el error de ∫L C(L) dL se estanca en ~1e-4 en vez de
+  bajar como h². Las entradas del artículo dependen de ello
+  (`lminc=1.999`, `lmaxc=2.0`, `Nlc=1` para tener L=2). `aa_quad` usa
+  puntos medios.
+- [ ] **`pmax` fija el paso de Courant** (`dtr = courant*dr/pmax`, 2 por
+  omisión) sin relación con los momentos de las partículas: en t2
+  |p|≤0.6, así que el paso es 3.3 veces más chico de lo necesario; si
+  alguna partícula supera `pmax`, ahora hay aviso.
+- [ ] **Partículas muertas**: los estados marcan con r=1e6 (o 1e4) las
+  partículas cortadas o no ligadas, pero `reduce_arrays` solo compacta si
+  queda menos del 95%; si se corta poco, siguen en los arreglos con f=0
+  (no cambian ninguna suma, pero cuestan tiempo y aparecen en los
+  mínimos y máximos impresos).
+- [ ] **`Sn` de orden 1 incluye ambos bordes** (|y|≤0.5): una partícula
+  exactamente a media celda de dos nodos deposita en los dos. Solo
+  afecta a `rho`, que ya no conserva la masa cuando drc≠dr.
+- [ ] **La salida ASCII `vlasov_fdist.2D` guarda L·f sin L**, así que no
+  sirve para `checkpoint`; la HDF5 sí (`l_part`).
+- [ ] **Masa fuera de la malla**: Poisson ignora la masa con r > r(Nr)
+  (ahora con aviso); si importa, aumentar `rmax`.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

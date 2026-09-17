@@ -108,6 +108,23 @@ program VP_PIC
   print *
   print *, 'Time step fixed at size: ',dt
 
+! The Courant bound in set_timestep uses the parameter pmax, not the momenta
+! the particles actually have, and the angle-action variables of analysish
+! and of the states aa and aa_quad are those of the isochrone. Say so when
+! the run steps outside those assumptions.
+
+  if (maxval(abs(p_part)) > pmax) then
+     print *
+     print *, 'WARNING: particles reach |p| = ',maxval(abs(p_part)),' > pmax = ',pmax
+     print *, '         The Courant bound dt <= courant*dr/pmax does not hold for them.'
+  end if
+
+  if (BGtype /= "Isochrone") then
+     print *
+     print *, 'WARNING: BGtype = ',trim(BGtype),'. h_k (analysish) and the states aa and'
+     print *, '         aa_quad use the angle-action variables of the isochrone.'
+  end if
+
   print *
   print *,'------------------------------'
   print *,'|  Time step  |     Time     |'
