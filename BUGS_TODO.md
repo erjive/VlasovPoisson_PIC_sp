@@ -387,6 +387,83 @@ afecta resultados):
 - [ ] **Masa fuera de la malla**: Poisson ignora la masa con r > r(Nr)
   (ahora con aviso); si importa, aumentar `rmax`.
 
+## Revisión de consistencia con las ecuaciones del método PIC
+
+Lectura completa del código contra el ciclo depósito → Poisson → interpolación →
+avance, con cada sospecha probada numéricamente antes de corregirla. Casos
+exactos construidos con `state=checkpoint` y un paso de euler (la fuerza sale de
+Δp/Δt): una esfera uniforme (radio 5, masa 1e-2, 2000 capas) con partículas de
+prueba de peso nulo en r∈[0.01,30], y una sola capa masiva en r=3.
+
+- [x] **La interpolación a las partículas ignoraba los nodos fantasma.** Con la
+  malla escalonada, una partícula en r<dr/2 comparte peso con el nodo en −dr/2;
+  sin él la fuerza salía 3.7 veces la exacta en r=0.01 (orden 1), 5.1 veces con
+  orden 3, y 8.5–25% en r=0.1. Ahora los nodos j≤0 son el espejo de 1−j
+  (Φ par, F impar).
+- [x] **El depósito no sumaba la imagen de la partícula en −r**, la simetría
+  f(r,p)=f(−r,−p) que sí suponen los fantasmas. Ahora se suma (con signo opuesto
+  para la corriente).
+- [x] **Volumen de la celda incoherente con el peso.** Se dividía por
+  4π(r²dr+dr³/12), el volumen de NGP, aunque el depósito es con W_n; para densidad
+  uniforme eso daba ρ_i/ρ0 = 1 + dr²/(12r²+dr²) (1.0357 en r=0.15, medido
+  1.03574; 1.23 en el primer nodo). Ahora V_i = 4π dr (r_i² + dr²(n+1)/12), el
+  segundo momento de W_n: la densidad uniforme sale exacta y Σρ_iV_i = M a 12
+  cifras.
+- [x] **Fuerza propia cero fuera de la malla.** Para r > r(Nr)+dr las partículas
+  no sentían la masa (−100% de error; −9.9% en r(Nr)+0.01). Ahora los nodos más
+  allá de r(Nr), guardados o espejados, toman la solución exterior
+  Φ(r_Nr) r_Nr/r, F(r_Nr)(r_Nr/r)².
+  Resultado de las tres correcciones en la esfera: con orden 2 y 3 la fuerza
+  coincide con la exacta a 6.25e-8 en todo el interior, desde r=0.01, que es la
+  precisión con que 2000 capas representan la esfera ((Δr/R)²/4); con orden 1,
+  1.25e-4 (el muestreo del triángulo). Fuera de la malla, ≤1.2e-4. En la capa:
+  0 dentro, −0.4917 M/R² sobre ella (−0.5 continuo), −(R/r)² M/R² fuera, también
+  en r=21 (antes 0). Con autogravedad y L∈[0.1,0.5] (r_min=0.16), el error de
+  energía con dr=0.1 baja de 4.7e-5 a 1.4e-5.
+- [x] **La reflexión en el origen no cambiaba el signo de la fuerza**, que euler y
+  leapfrog usan al empezar el paso siguiente. Órbitas radiales (L=0) por el origen
+  en el isócrono, leapfrog: error de energía por partícula 3.97e-7 → 4.55e-8 con
+  dt=0.01, orden 2 limpio (cocientes 4.00).
+- [x] **Tras `reduce_arrays` la fuerza no se recalculaba** y leapfrog/euler usaban
+  un arreglo recién reasignado (instrumentado: el paso siguiente usa la marca
+  puesta tras la reasignación). Con 50 de 250 partículas fuera de rmax, error de
+  energía de las que quedan 2.7e-3 → 2.2e-5.
+- [x] **Umbral del 95% en `reduce_arrays` y marcadores r=1e6/1e4.** Si se
+  descartaba menos del 5%, las partículas fuera de rmax (o con peso nulo) seguían
+  en la simulación. Ahora `remove_particles` quita siempre las que corresponde:
+  las de peso nulo al construir el estado y las de r>rmax con `reduceparticles`.
+- [x] **Energía cinética sin la parte tangencial.** L²/2r² estaba en la
+  "potencial". Ahora K = p²/2 + L²/2r²; K+W = E a 8 cifras.
+- [x] **Nodos en el borde derecho de la celda en `aa` y `gaussian1`** (primer
+  orden, ⟨L⟩ sesgado): ahora en el punto medio, como `aa_quad`. Para L=2 exacto
+  con `Nlc=1` use `lminc=1.9995 lmaxc=2.0005`.
+- [x] **Paso de tiempo**: el criterio de aceleración usaba `drc`, el tamaño de celda
+  del soporte inicial (sin significado para `aa_quad` o `checkpoint`); ahora dr,
+  la escala de la fuerza. `Fmax` se ignoraba con `BGtype=null` aun con término
+  centrífugo; ahora siempre cuenta. `pmax` sigue siendo 2 por omisión: se probó
+  tomar el |p| máximo de las partículas y, con fondo nfw, dt pasó de 0.025 a 0.26
+  y la corrida divergió; ningún criterio automático aquí conoce la frecuencia
+  orbital. `pmax<=0` queda como opción. En los 12 casos de la batería el dt no
+  cambia salvo `dt_switch=var`.
+- [x] **Malla radial**: con rmin>0 no era escalonada y r(0) nunca se usaba; ahora
+  r_i = rmin + (i−½)dr siempre. Los escritores ASCII cambiaban a 0 los valores con
+  |v|<1e-50; ya no. `rho` y `curr` de salida usaban una forma S_n de ancho drc; ahora
+  el mismo depósito que Poisson.
+- [x] **Código muerto** (commit `ea928cc`): `save_force_pot` (sumaba 1e-50 a force y
+  pot), otras dos rutinas de escritura, s1–s4, w1–w3, arreglos y parámetros sin
+  efecto; `spatialorder` y `forcetype` quedan como obsoletos.
+
+Verificación general: batería de 13 casos (t1/t2/t3, leapfrog, euler, var,
+aa_quad autogravitante, king analytic, nfw, cruce del origen, HDF5 orden 3,
+reduceparticles) sin errores con `-fcheck=all`, y dos corridas idénticas bit a
+bit. Con dt igual, t2 conserva la energía a 1.9e-7 (antes 2.5e-7) y t3 a 2.7e-7
+(antes 3.5e-7); |h_1|/h_0 final cambia ≤0.5% por los nodos en punto medio y el
+depósito.
+
+Lo que queda sin cambiar, por ser definición y no dinámica: `analysish`, `aa` y
+`aa_quad` usan las variables ángulo–acción del isócrono (avisado si el fondo es
+otro), y el paso de tiempo debe fijarse con una prueba de convergencia.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

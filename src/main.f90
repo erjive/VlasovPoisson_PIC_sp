@@ -108,12 +108,11 @@ program VP_PIC
   print *
   print *, 'Time step fixed at size: ',dt
 
-! The Courant bound in set_timestep uses the parameter pmax, not the momenta
-! the particles actually have, and the angle-action variables of analysish
-! and of the states aa and aa_quad are those of the isochrone. Say so when
-! the run steps outside those assumptions.
+! An explicit pmax is a bound on |p| for the Courant step, and the
+! angle-action variables of analysish and of the states aa and aa_quad are
+! those of the isochrone. Say so when the run steps outside those assumptions.
 
-  if (maxval(abs(p_part)) > pmax) then
+  if (pmax > 0.0d0 .and. maxval(abs(p_part)) > pmax) then
      print *
      print *, 'WARNING: particles reach |p| = ',maxval(abs(p_part)),' > pmax = ',pmax
      print *, '         The Courant bound dt <= courant*dr/pmax does not hold for them.'
@@ -233,12 +232,17 @@ program VP_PIC
 
 !    At the origin impose the symmetry condition f(r,p) = f(-r,-p).
 
+!    The force is odd in r (background, centrifugal term and the grid
+!    field alike), so it changes sign too: euler and leapfrog use it at the
+!    start of the next step. The potential is even and stays.
+
      if (rmin == 0) then
        !$OMP PARALLEL DO SCHEDULE(STATIC)
        do i=1,Npart
          if (r_part(i)<0.d0) then
            r_part(i) = -r_part(i)
            p_part(i) = -p_part(i)
+           force_part(i) = -force_part(i)
          end if
        end do
        !$OMP END PARALLEL DO
@@ -283,10 +287,13 @@ program VP_PIC
         if (output_format/="hdf5") call save_series()
      end if
 
-!    Discard particles beyond rmax.
+!    Discard particles beyond rmax. The arrays are resized, so the force on
+!    the remaining particles is recomputed: euler and leapfrog use it at the
+!    start of the next step.
 
      if (reduceparticles .and. (mod(l,Nreduce).eq.0)) then
        call reduce_arrays
+       call grav_force()
      end if
 
      if (mod(l,time_output).eq.0) then

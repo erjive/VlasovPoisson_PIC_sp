@@ -23,8 +23,8 @@ module utils
 ! ***************************
 
     ! Find out number of grid points in r direction.
-    Nr = int((rmax-rmin)/dr)
-    if (rmin==0.0d0) Nr=Nr+1
+    ! Staggered grid, r(i) = rmin + (i-1/2) dr, covering [rmin,rmax].
+    Nr = int((rmax-rmin)/dr) + 1
 
     print *
     print *, 'Number of points in r direction ',Nr
@@ -82,19 +82,7 @@ module utils
 
 ! Coordinates, force and potential.
 
-! construct_grid fills r(i) for i=0,Nr when rmin>0 (ghost=0), but for
-! i=1-ghost,Nr when rmin=0 (ghost=2 or 3) -- the rmin>0 case still
-! writes index 0, one element below the "1-ghost=1" lower bound that
-! formula alone would give, so allocate the wider of the two ranges
-! explicitly instead of just "r(1-ghost:Nr)" (an out-of-bounds write
-! to r(0) for rmin>0, silently corrupting the heap until something
-! else's deallocate happens to detect it).
-
-  if (rmin>0.d0) then
-     allocate(r(0:Nr))
-  else
-     allocate(r(1-ghost:Nr))
-  end if
+  allocate(r(1-ghost:Nr))
   r = 0.0d0
 
   if (autointeraction) then
@@ -176,51 +164,32 @@ subroutine construct_grid
 ! ***   FIND GRID POINT POSITIONS   ***
 ! *************************************
 
-! Position in direction r.  In case that rmin=0
-! we make sure to stagger the origin and we add
-! two ghost points to the left of the origin for 
-! second order integration, and three points for 
-! fourth order integration.
+! Staggered grid: r(i) = rmin + (i-1/2) dr. With rmin = 0 no point sits at
+! the origin, and the ghost points 1-k sit at -r(k), the mirror images used by
+! the symmetry f(r,p) = f(-r,-p).
 
   integer i
 
-  if (rmin>0.d0) then
-     do i=0,Nr
-        r(i) = rmin + dble(i)*dr
-     end do
-  else
-
   do i=1-ghost,Nr
-    r(i) = (dble(i)-0.5d0)*dr
+    r(i) = rmin + (dble(i)-0.5d0)*dr
   end do
-      
-  end if
-
 
 end subroutine construct_grid
 
   !> Build a cell list for the current particles.
   !!
-  !! Groups particle indices (1:Npart) by the radial grid cell
-  !! (spacing dr) nearest their position r_part(j), so that a
-  !! deposit/interpolation loop over grid points i=1,Nr only needs
-  !! to scan particles in a few nearby cells instead of all Npart
-  !! particles -- turning the O(Nr*Npart) brute-force search in
-  !! density(), avg_density() and poisson_rk() into ~O(Nr+Npart).
+  !! Groups particle indices (1:Npart) by the grid point nearest to them, so
+  !! that the deposit on grid point i only scans the particles of a few
+  !! nearby cells instead of all of them.
   !!
   !! On output, the particles assigned to grid cell c (1<=c<=Nr) are
   !! particle_order(cell_start(c):cell_start(c+1)-1). Both arrays
   !! are allocated here; the caller must deallocate them.
   !!
-  !! The grid is uniform with spacing dr for both grid conventions
-  !! used in construct_grid (rmin>0 and the staggered rmin=0 case),
-  !! so r(k) = r(1) + (k-1)*dr always holds, and the nearest grid
-  !! index to a position x is nint((x-r(1))/dr) + 1, independent of
-  !! which convention built the grid.  Particles that fall outside
-  !! the physical range (e.g. already flagged/removed with a huge
-  !! r_part, or otherwise beyond r(1):r(Nr)) are clamped into the
-  !! boundary cell: harmless, since the caller still applies the
-  !! exact distance cutoff and will simply reject them.
+  !! The grid is uniform, r(k) = r(1) + (k-1)*dr, so the nearest grid index
+  !! to a position x is nint((x-r(1))/dr) + 1. Particles beyond either end of
+  !! the grid (including negative radii within a time step) are filed in the
+  !! end cell; the deposit still applies the exact support of the weight.
   subroutine build_cell_list(cell_start,particle_order)
 
     implicit none
@@ -277,35 +246,55 @@ end subroutine construct_grid
 ! a fraction "courant" of a grid cell dr per time step.
 
   integer i
-  real(8) dtr,dtp       ! Auxiliary variables.
+  real(8) dtr,dtp,vmax  ! Auxiliary variables.
 
-  dtr = courant*dr/pmax
+! pmax > 0 is the velocity scale chosen by the user; pmax <= 0 takes the
+! largest |p| of the particles now. Neither criterion knows the orbital
+! frequency: with a deep background (nfw, test case of the audit) the step
+! from the particles' own |p| made a run diverge. The step has to be checked
+! with a convergence test in any case.
+
+  if (pmax > 0.0d0) then
+     vmax = pmax
+  else
+     vmax = maxval(abs(p_part))
+  end if
+
+  if (vmax > 0.0d0) then
+     dtr = courant*dr/vmax
+  else
+     dtr = huge(1.0d0)
+  end if
 
 ! The step is also bounded with the acceleration criterion of symplectic
-! N-body integration (e.g. Gadget-2, Springel 2005): the time to move a
-! distance drc (the radial cell of the phase-space support) under the
-! largest force,
+! N-body integration (e.g. Gadget-2, Springel 2005): the time to move one grid
+! spacing dr, the scale on which the force is resolved, from rest under the
+! largest force on any particle (background, self-gravity and centrifugal
+! term),
 !
-!   dtp = courant * sqrt(2*drc/Fmax).
+!   dtp = courant * sqrt(2*dr/Fmax).
 !
-! The force comes from the background or from self-gravity. By default this
-! runs once, before the main loop (dt_switch="fix").
+! By default this runs once, before the main loop (dt_switch="fix").
 
-  if (BGtype /= "null" .or. autointeraction) then
-    Fmax = 0.0d0
+  Fmax = 0.0d0
+  do i=1,Npart
+     Fmax = max(Fmax,abs(force_part(i)))
+  end do
 
-    do i=1,Npart
-       Fmax = max(Fmax,abs(force_part(i)))
-    end do
-
-    if (Fmax>0.0d0) then
-       dtp = courant*sqrt(2.0d0*drc/Fmax)
-       dt  = min(dtr,dtp)
-    else
-       dt = dtr
-    end if
+  if (Fmax>0.0d0) then
+     dtp = courant*sqrt(2.0d0*dr/Fmax)
   else
-    dt = dtr
+     dtp = huge(1.0d0)
+  end if
+
+  dt = min(dtr,dtp)
+
+  if (dt >= huge(1.0d0)) then
+     print *
+     print *, 'No momentum and no force: the time step is undefined; set pmax > 0.'
+     print *, 'Aborting ...'
+     print *
+     stop 1
   end if
 
   end subroutine set_timestep
@@ -483,12 +472,7 @@ end subroutine construct_grid
   write(101,"(A8,ES14.6)") '#Time = ',t
 
   do i=1,Nr
-     if (dabs(var(i)).gt.1.0D-50) then
-        write(101,"(2ES16.8)") r(i),var(i)
-
-     else
-        write(101,"(2ES16.8)") r(i),0.0d0
-     end if
+     write(101,"(2ES16.8)") r(i),var(i)
   end do
 
 ! Leave two blank spaces before next time.
@@ -565,11 +549,7 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
   write(101,"(A8,ES14.6)") '#Time = ',t
 
   do i=1,Npart
-    if (dabs(var(i)).gt.1.0D-50) then
-      write(101,"(3ES16.8)") r_part(i),p_part(i),var(i)
-    else
-      write(101,"(3ES16.8)") r_part(i),p_part(i),0.0D0
-    end if
+    write(101,"(3ES16.8)") r_part(i),p_part(i),var(i)
   end do
 
   write (101,*)
@@ -653,87 +633,58 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
 
 
-subroutine reduce_arrays
-  use parameters
-  use arrays
+  !> Keep only the particles with keep(j) true, in their order, resizing every
+  !! per-particle array. The potential and force of the kept particles are no
+  !! longer valid afterwards: the caller must recompute them before they are
+  !! used (main calls grav_force right after).
+  subroutine remove_particles(keep)
 
- 
-  integer i,j
-  integer counter,Npart_aux
-  real(8), allocatable, dimension (:) :: r_aux,p_aux,l_aux,f_aux
-!  real(8), dimension (1:Npart) :: r_aux,p_aux,f_aux
+    implicit none
+
+    logical, intent(in) :: keep(:)
+    integer :: n
+    real(8), allocatable :: tmp(:)
+
+    n = count(keep)
+    if (n == Npart) return
+
+    call pack_array(r_part)
+    call pack_array(p_part)
+    call pack_array(l_part)
+    call pack_array(f)
+
+    deallocate(r_part_p,p_part_p,p_part_h,pot_part,potself_part,force_part)
+    allocate(r_part_p(n),p_part_p(n),p_part_h(n),pot_part(n),potself_part(n),force_part(n))
+    r_part_p = 0.0d0
+    p_part_p = 0.0d0
+    p_part_h = 0.0d0
+    pot_part = 0.0d0
+    potself_part = 0.0d0
+    force_part = 0.0d0
+
+    print *, "Particles removed: ",Npart-n,", remaining: ",n
+    Npart = n
+
+  contains
+
+    subroutine pack_array(a)
+      real(8), allocatable, intent(inout) :: a(:)
+      tmp = pack(a,keep)
+      call move_alloc(tmp,a)
+    end subroutine pack_array
+
+  end subroutine remove_particles
 
 
-! Count How many particles are still in the grid
+  !> Discard the particles beyond rmax (reduceparticles=.true.).
+  subroutine reduce_arrays
 
-  counter = 0
+    implicit none
 
-  do i=1,Npart
-    if (r_part(i)<= rmax) then
-      counter = counter + 1
-    end if 
-  end do
+    call remove_particles(r_part <= rmax)
 
-! Reduce the size of arrays if we have less than 95% 
-! of the original number of particles.
+  end subroutine reduce_arrays
 
-  if (dble(counter) < 0.95D0* Npart) then 
-  allocate(r_aux(1:Npart))
-  allocate(p_aux(1:Npart))
-  allocate(l_aux(1:Npart))
-  allocate(f_aux(1:Npart))
-
-! Copy the position and momentum of particles
-
-  r_aux = r_part
-  p_aux = p_part
-  l_aux = l_part
-  f_aux = f
-
-! Deallocate arrays
-
-  deallocate(r_part)
-  deallocate(r_part_p)
-  deallocate(p_part)
-  deallocate(p_part_p)
-  deallocate(p_part_h)
-  deallocate(l_part)
-  deallocate(pot_part)
-  deallocate(potself_part)
-  deallocate(force_part)
-  deallocate(f)
-
-! Allocate arrays 
-
-  Npart_aux = Npart
-  Npart     = counter
-
-  allocate(r_part(1:Npart))
-  allocate(r_part_p(1:Npart))
-  allocate(p_part(1:Npart))
-  allocate(p_part_p(1:Npart))
-  allocate(p_part_h(1:Npart))
-  allocate(l_part(1:Npart))
-  allocate(pot_part(1:Npart))
-  allocate(potself_part(1:Npart))
-  potself_part = 0.d0
-  allocate(force_part(1:Npart))
-  allocate(f(1:Npart))
-
-  j = 1
-  do i=1,Npart_aux
-    if (r_aux(i)<=rmax) then
-      r_part(j) = r_aux(i) 
-      p_part(j) = p_aux(i)
-      l_part(j) = l_aux(i)
-      f(j)      = f_aux(i)
-      j = j+1
-    end if
-
-  end do
-  print *, "In the grid are still", Npart, "computational particles"
-  end if
-end subroutine reduce_arrays
 
   !> Invert the angle-action pair (Q,J) of a particle with angular momentum
   !! L back to (r,p_r), in the isochrone of unit mass and scale.

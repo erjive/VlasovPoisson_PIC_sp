@@ -31,8 +31,9 @@
 
     smallpi = acos(-1.0d0)
 
-! Cells of the support in (r,p,L). The gaussian1 profile adds the mirror
-! image at (-r0,-p0) so that f(-r,-p) = f(r,p) holds at the origin.
+! Cells of the support in (r,p,L), with the nodes at the cell midpoints. The
+! gaussian1 profile adds the mirror image at (-r0,-p0) so that
+! f(-r,-p) = f(r,p) holds at the origin.
 
 ! Find the size of the cell
 
@@ -54,9 +55,9 @@
 
             indx = (k-1)*Nrc*Npc + (i-1)*Npc + j
 
-            raux = rminc+(dble(i))*drc
-            paux = pminc+dble(j)*dpc
-            laux = lminc+dble(k)*dlc
+            raux = rminc+(dble(i)-0.5d0)*drc
+            paux = pminc+(dble(j)-0.5d0)*dpc
+            laux = lminc+(dble(k)-0.5d0)*dlc
             r_part(indx)  = raux
             p_part(indx)  = paux
             l_part(indx)  = laux
@@ -72,16 +73,9 @@
 !     Cutoff filtering only depends on the particle's own indx, not
 !     on i/j/k individually, so it's just a flat loop over 1:Npart.
 
-      !$OMP PARALLEL DO SCHEDULE(GUIDED)
-      do indx=1,Npart
-         if (f(indx)<= cutoff*f_max) then
-            f(indx)=0.0D0
-            r_part(indx) = 1000000.D0
-         end if
-      end do
-      !$OMP END PARALLEL DO
+!     Nodes where f is not above cutoff*f_max carry no mass and are removed.
+      call remove_particles(f > cutoff*f_max)
 
-      call reduce_arrays
 
 
       f = a0/(8.D0*smallpi**2*drc*dpc*dlc*sum(f*l_part))*f
@@ -102,27 +96,27 @@
 
             indx = (k-1)*Nrc*Npc + (i-1)*Npc + j
 
-            raux = rminc+dble(i)*drc
-            paux = pminc+dble(j)*dpc
-            laux = lminc+dble(k)*dlc
+            raux = rminc+(dble(i)-0.5d0)*drc
+            paux = pminc+(dble(j)-0.5d0)*dpc
+            laux = lminc+(dble(k)-0.5d0)*dlc
 
             r_part(indx) = raux
             p_part(indx) = paux
             l_part(indx) = laux
 
-            energy = -1.0/(1.0D0+dsqrt(1.0D0+raux**2)) + 0.5d0*laux**2/(raux**2) + 0.5D0*paux**2
+            energy = -1.0d0/(1.0D0+dsqrt(1.0D0+raux**2)) + 0.5d0*laux**2/(raux**2) + 0.5D0*paux**2
             er1 = dsqrt((1.d0+energy*(2.d0+laux**2)-dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+laux**2)))/(2.d0*energy**2))
             er2 = dsqrt((1.d0+energy*(2.d0+laux**2)+dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+laux**2)))/(2.d0*energy**2))
             s1 = 1.d0 + sqrt(1.d0+er1**2)
             s2 = 1.d0 + sqrt(1.d0+er2**2)
             s  = 1.d0 + sqrt(1.d0+raux**2)
-            argaux = (s1+s2-2.0*s)/(s2-s1)
+            argaux = (s1+s2-2.0d0*s)/(s2-s1)
 
             if (paux>=0.d0) then
-              eta = dacos(sign(min(abs(argaux),1.0),argaux))
+              eta = dacos(sign(min(abs(argaux),1.0d0),argaux))
 
             else
-              eta = dacos(-sign(min(abs(argaux),1.0),argaux))+smallpi
+              eta = dacos(-sign(min(abs(argaux),1.0d0),argaux))+smallpi
             end if
 
             Q3 = eta - sqrt((-2.d0*energy)**3)*sqrt(-laux**2-2.d0*energy-2.d0-0.5D0/energy)/(-2.d0*energy)*sin(eta)
@@ -131,10 +125,9 @@
 
             f(indx) = exp(-sin(0.5d0*Q3)**2/sp**2)*exp(-J3**2/sr**2)*J3**2*exp(-(laux-l0)**2/sl**2)
 
-            if (f(indx) /= f(indx) ) then
-              f(indx) = 0.D0
-              r_part(indx) = 10000.D0
-            end if
+!           Unbound nodes (E >= 0) have no angle-action variables and no
+!           mass in this distribution.
+            if (f(indx) /= f(indx)) f(indx) = 0.D0
           end do
         end do
       end do
@@ -142,17 +135,10 @@
 
       f_max = maxval(f)
 
-      !$OMP PARALLEL DO SCHEDULE(GUIDED)
-      do indx=1,Npart
-         if (f(indx)<= cutoff*f_max) then
-            f(indx)=0.0D0
-            r_part(indx) = 1000000.D0
-         end if
-      end do
-      !$OMP END PARALLEL DO
+!     Nodes where f is not above cutoff*f_max carry no mass and are removed.
+      call remove_particles(f > cutoff*f_max)
 
 
-      call reduce_arrays
 
 
       f = a0/(8.D0*smallpi**2*drc*dpc*dlc*sum(f*l_part))*f
@@ -212,16 +198,9 @@
 
       f_max = maxval(f)
 
-      !$OMP PARALLEL DO SCHEDULE(GUIDED)
-      do indx=1,Npart
-         if (f(indx)<= cutoff*f_max) then
-            f(indx)=0.0D0
-            r_part(indx) = 1000000.D0
-         end if
-      end do
-      !$OMP END PARALLEL DO
+!     Nodes where f is not above cutoff*f_max carry no mass and are removed.
+      call remove_particles(f > cutoff*f_max)
 
-      call reduce_arrays
 
       f = a0/(8.D0*smallpi**2*drc*dpc*dlc*sum(f*l_part))*f
 

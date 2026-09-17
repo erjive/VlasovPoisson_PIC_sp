@@ -403,6 +403,7 @@ module paramfile
     if (dr <= 0.0d0)    call fail('dr must be positive.')
     if (Nrc <= 0 .or. Npc <= 0 .or. Nlc <= 0) call fail('Nrc, Npc and Nlc must be positive.')
     if (courant <= 0.0d0) call fail('courant must be positive.')
+    if (bsplineorder < 1 .or. bsplineorder > 3) call fail('bsplineorder must be 1, 2 or 3.')
     if (spatial_output <= 0 .or. time_output <= 0) &
        call fail('time_output and spatial_output must be positive.')
 

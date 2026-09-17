@@ -6,8 +6,12 @@
 !> Kinetic, potential and total energy of the particles:
 !!
 !!            /
-!!   Energy = | (p**2/2 + phi_ext(r) + L**2/(2 r**2) + phi_self(r)/2) f 8 pi**2 L dr dp dL
+!!   Energy = | (p**2/2 + L**2/(2 r**2) + phi_ext(r) + phi_self(r)/2) f 8 pi**2 L dr dp dL
 !!            /
+!!
+!! "kinetic" is the radial plus tangential kinetic energy, p**2/2 + L**2/(2 r**2);
+!! "potential" the gravitational part. pot_part carries the centrifugal term
+!! because it enters the radial force, so it is moved to the kinetic sum here.
 !!
 ! The self-gravity potential carries a factor 1/2. Summing phi_self over
 ! particles counts the interaction of every pair twice, once from each side;
@@ -57,8 +61,8 @@ subroutine energy
   le = 0.0D0
   !$OMP DO SCHEDULE(STATIC)
   do i=1,Npart
-    lk = lk + 0.5D0*p_part(i)**2*f(i)*l_part(i)
-    lp = lp + (pot_part(i) - 0.5D0*potself_part(i))*f(i)*l_part(i)
+    lk = lk + (0.5D0*p_part(i)**2 + 0.5D0*l_part(i)**2/(r_part(i)**2+eps*eps))*f(i)*l_part(i)
+    lp = lp + (pot_part(i) - 0.5D0*potself_part(i) - 0.5D0*l_part(i)**2/(r_part(i)**2+eps*eps))*f(i)*l_part(i)
     le = le + (0.5D0*p_part(i)**2 + pot_part(i) - 0.5D0*potself_part(i))*f(i)*l_part(i)
   end do
   !$OMP END DO

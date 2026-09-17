@@ -40,8 +40,8 @@
   real(8) poth,dev_poth
   real(8) rho0,pi
   real(8) cutoff_interp
-  integer :: Wgrid,jc,jlo,jhi
-  real(8) :: w
+  integer :: Wgrid,jc,m
+  real(8) :: w,rj,pj,fj,rm,sgn
 
 ! *******************
 ! ***   NUMBERS   ***
@@ -78,7 +78,7 @@
 
 ! First point with positive r (i=1).
 
-  rho0 = 0.5d0*(avg_rho(0) + avg_rho(1))
+  rho0 = avg_rho(1)
 
   pot(1) = 2.d0/3.d0*pi*rho0*r(1)**2
   dev_pot(1) = 4.d0/3.d0*pi*rho0*r(1)
@@ -143,40 +143,58 @@
   pot_part   = 0.0D0
   force_part = 0.0D0
 
-! Interpolation to the particles. The grid is uniform, r(k) = r(1)+(k-1) dr,
-! so the nodes near a particle follow from inverting that formula, without a
-! cell list. The loop runs in parallel over particles: each pot_part(i) and
-! force_part(i) belongs to one thread for its whole inner loop.
-
-  cutoff_interp = (dble(bsplineorder)+1.0d0)*dr
-
-! Wn of order n vanishes for |y| >= (n+1)/2. With jc the grid point nearest
-! the particle, every node inside the support satisfies
-! |j-jc| < (n+1)/2 + 1/2, so Wgrid = floor((n+2)/2) nodes on each side
-! (1, 2, 2 for n = 1, 2, 3) hold all nonzero weights. Nodes further out only
-! added exact zeros, so leaving them out, and evaluating Wn once for both
-! sums, does not change the result.
+! Interpolation to the particles with the same weight W_n used in the
+! deposit, over every grid point j within its support. The grid is uniform,
+! r_j = r(1) + (j-1) dr, and the field is known beyond the stored points:
+!
+!   j <= 0   the mirror of point 1-j (r_j = -r_(1-j)): the potential is even
+!            and the force odd, the symmetry f(r,p) = f(-r,-p) at the origin;
+!   beyond   a point past r(Nr), stored or mirrored, takes the exterior
+!            solution Phi = Phi(r_Nr) r_Nr/r and F = F(r_Nr) (r_Nr/r)**2 of
+!            the mass on the grid.
+!
+! So the weights of every particle add up to one, at any radius, including
+! particles closer to the origin than r(1) or beyond the last point. The loop
+! runs in parallel over particles.
 
   Wgrid = (bsplineorder+2)/2
+  cutoff_interp = 0.5d0*dble(bsplineorder+1)*dr
 
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,jc,jlo,jhi,w)
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,jc,rj,w,pj,fj,m,rm,sgn)
 
   do i=1,Npart
 
     jc  = nint((r_part(i)-r(1))/dr) + 1
-    jlo = max(1,jc-Wgrid)
-    jhi = min(Nr,jc+Wgrid)
 
-    do j=jlo,jhi
-      if (abs(r_part(i)-r(j))<=cutoff_interp) then
+    do j=jc-Wgrid,jc+Wgrid
 
-        w = Wn(bsplineorder,(r_part(i)-r(j))/dr)
+      rj = r(1) + dble(j-1)*dr
+      if (abs(r_part(i)-rj) >= cutoff_interp) cycle
 
-        pot_part(i)   = pot_part(i) + pot(j)*w
-
-        force_part(i) = force_part(i) + force(j)*w
-
+!     Point j <= 0 is the mirror of point m = 1-j (potential even, force
+!     odd); a point beyond the grid, stored or mirrored, takes the exterior
+!     solution.
+      if (j <= 0) then
+        m = 1-j
+        sgn = -1.0d0
+      else
+        m = j
+        sgn = 1.0d0
       end if
+      if (m > Nr) then
+        rm = r(1) + dble(m-1)*dr
+        pj = pot(Nr)*r(Nr)/rm
+        fj = sgn*force(Nr)*(r(Nr)/rm)**2
+      else
+        pj = pot(m)
+        fj = sgn*force(m)
+      end if
+
+      w = Wn(bsplineorder,(r_part(i)-rj)/dr)
+
+      pot_part(i)   = pot_part(i) + pj*w
+      force_part(i) = force_part(i) + fj*w
+
     end do
   end do
   !$OMP END PARALLEL DO

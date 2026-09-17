@@ -24,7 +24,7 @@ module parameters
 
    real(8)   :: rmin = 0.0D0             !< Minimum radius of the grid
    real(8)   :: rmax = 20.0D0            !< Maximum radius of the grid
-   real(8)   :: pmax = 2.0D0             !< Maximum momentum (to stimate the CFL condition)
+   real(8)   :: pmax = 2.0D0             !< Velocity scale of the Courant step, dt <= courant*dr/pmax; <=0: largest |p| of the particles
 
    real(8)   :: rminc= 0.0D0             !< Minimum radius in the support of f.
    real(8)   :: rmaxc= 4.0D0             !< Maximum radius in the support of f.

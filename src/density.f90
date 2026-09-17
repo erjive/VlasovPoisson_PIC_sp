@@ -1,98 +1,44 @@
-
 ! ===========================================================================
 ! density.f90
 ! ===========================================================================
 !> Mass density and radial current on the radial grid, deposited from the
-!! particles:
+!! particles with the weight function W_n of order n (bsplineorder) and width
+!! dr, the same function that interpolates the field back to the particles.
 !!
-!!   rho(r)  = (1/r**2) 2 pi Int f L dp dL,    curr(r) = (1/r**2) 2 pi Int p f L dp dL,
+!! A particle is a thin shell of mass m_j = 8 pi**2 drc dpc dlc f_j L_j at
+!! radius r_j. Grid point i receives m_j W_n((r_i-r_j)/dr), and its density is
+!! that mass over the volume the weight covers,
 !!
-!! so that 4 pi Int r**2 rho dr = 8 pi**2 Int f L dr dp dL is the mass.
-!! "density" deposits rho and curr with the shape Sn of width drc (the
-!! particle cell) and avg_rho with the weight Wn of width dr (the grid);
-!! "avg_density" computes only avg_rho, the density Poisson uses. Only avg_rho
-!! conserves the mass on the grid when drc /= dr: rho is an output diagnostic.
+!!   V_i = Int W_n((r_i-r)/dr) 4 pi r**2 dr = 4 pi dr (r_i**2 + dr**2 (n+1)/12),
+!!
+!! since W_n has unit area and second moment (n+1)/12 in units of dr**2.
+!! With this volume a uniform density is reproduced exactly and
+!! Sum_i rho_i V_i is the deposited mass.
+!!
+!! With rmin=0 the distribution obeys f(r,p) = f(-r,-p): every particle has
+!! an image at (-r_j,-p_j), and near the origin its weight on grid point i,
+!! W_n((r_i+r_j)/dr), is added (for the current, with the opposite sign
+!! because p changes sign). This is the same symmetry that fills the ghost
+!! points, and it makes the formula for V_i hold down to the first point.
 
 subroutine density
 
   use parameters
   use arrays
-  use functions
   use utils
 
   implicit none
 
-  integer i,j
-  real(8) :: smallpi,factor,average_rho,outside
+  integer j
+  real(8) :: smallpi,average_rho,outside
   logical, save :: warned = .false.
-  real(8) :: cutoff_rho,cutoff_avg
-  integer :: Wcell,c,clo,chi,pp
-  integer, allocatable :: cell_start(:),particle_order(:)
-
   character(20) filename ! Name of output file.
 
   smallpi = acos(-1.0d0)
 
-  factor = 2.0*smallpi*drc*dpc*dlc
+  call deposit(.true.)
 
-  rho = 0.D0
-  avg_rho = 0.D0
-  curr = 0.D0
-
-! The shape and weight functions have compact support, so a cell list
-! (build_cell_list in utils.f90) restricts the deposit on grid point i to
-! the particles filed in nearby cells.
-
-  call build_cell_list(cell_start,particle_order)
-
-  cutoff_rho = dble(bsplineorder)*drc
-  cutoff_avg = dble(bsplineorder)*dr
-  Wcell = ceiling(max(cutoff_rho,cutoff_avg)/dr) + 1
-
-! Parallel over grid points only: rho(i), curr(i) and avg_rho(i) belong to
-! one thread for the whole inner loop over particles.
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(c,clo,chi,pp,j)
-
-  do i=1,Nr
-
-    clo = max(1,i-Wcell)
-    chi = min(Nr,i+Wcell)
-
-    do c=clo,chi
-      do pp=cell_start(c),cell_start(c+1)-1
-        j = particle_order(pp)
-
-        if (abs(r(i)-r_part(j))<=cutoff_rho) then
-
-          rho(i) = rho(i) + f(j)*l_part(j)*Sn(bsplineorder,(r(i)-r_part(j))/drc,drc)
-          curr(i) = curr(i)+f(j)*l_part(j)*p_part(j)*Sn(bsplineorder,(r(i)-r_part(j))/drc,drc)
-        end if
-
-        if (abs(r(i)-r_part(j))<=cutoff_avg) then
-
-          avg_rho(i) = avg_rho(i) + f(j)/(dr+dr**3/(12.d0*r(i)**2))*l_part(j)*Wn(bsplineorder,(r(i)-r_part(j))/dr)
-
-        end if
-
-      end do
-    end do
-  end do
-  !$OMP END PARALLEL DO
-
-  deallocate(cell_start,particle_order)
-
-! Ghost points from the reflection symmetry f(r,p) = f(-r,-p), which makes
-! rho even in r. The grid is staggered, r(i) = (i-1/2) dr, so the ghost point
-! 1-k sits at -r(k) and mirrors the physical point k.
-
-  do i=1,ghost
-      rho(1-i) = rho(i)
-      avg_rho(1-i) = avg_rho(i)
-  end do
-
-
-  rho = factor*rho/r**2
-  avg_rho = factor*avg_rho/r**2
+  rho = avg_rho
 
 ! With self-gravity, Poisson only sees the mass on the grid. Report, once,
 ! when part of it has left.
@@ -129,15 +75,24 @@ subroutine density
   filename = 'vlasov_rhomix'
   call save0Ddata(directory,filename,t,average_rho)
 
-
 end subroutine density
-
 
 
 !> avg_rho alone, for Poisson; called on every force evaluation with
 !! self-gravity, so it is the most expensive loop of those runs.
 
 subroutine avg_density
+
+  implicit none
+
+  call deposit(.false.)
+
+end subroutine avg_density
+
+
+!> Deposit the particles on the grid: avg_rho always, curr if want_curr.
+
+subroutine deposit(want_curr)
 
   use parameters
   use arrays
@@ -146,49 +101,59 @@ subroutine avg_density
 
   implicit none
 
+  logical, intent(in) :: want_curr
+
   integer i,j
-  real(8) :: smallpi,factor,diff,contribution,shell
-  real(8) :: cutoff_avg
+  real(8) :: smallpi,factor,cutoff_w,vol,wd,wi,m
   integer :: Wcell,c,clo,chi,pp
   integer, allocatable :: cell_start(:),particle_order(:)
+  logical :: images
 
   smallpi = acos(-1.0d0)
 
-  factor = 2.0*smallpi*drc*dpc*dlc
+! Mass of a particle is 4 pi factor f L; density = mass W / V_i.
+  factor = 2.0d0*smallpi*drc*dpc*dlc
 
   avg_rho = 0.D0
+  if (want_curr) curr = 0.D0
+
+  images = (ghost > 0)
 
   call build_cell_list(cell_start,particle_order)
 
-  cutoff_avg = (dble(bsplineorder) + 1.0d0)*dr
+! W_n vanishes for |y| >= (n+1)/2. A particle is filed in the cell of its
+! nearest grid point, so the particles that give grid point i a nonzero
+! weight lie in cells i-Wcell..i+Wcell with Wcell = floor((n+2)/2). An image
+! at -r_j only reaches the first points, whose cell range already includes
+! the cells near the origin where such a particle is filed.
 
-! Wn of order n vanishes for |y| >= (n+1)/2, and a particle is filed in the
-! cell of its nearest grid point, so the particles that give grid point i a
-! nonzero weight lie in cells i-Wcell..i+Wcell with Wcell = floor((n+2)/2)
-! (1, 2, 2 for n = 1, 2, 3). Further cells only added exact zeros; leaving
-! them out, and forming the shell denominator once per grid point, does not
-! change the result.
-
+  cutoff_w = 0.5d0*dble(bsplineorder+1)*dr
   Wcell = (bsplineorder+2)/2
 
-! Parallel over grid points only, as in density.
+! Parallel over grid points only: avg_rho(i) and curr(i) belong to one thread
+! for the whole inner loop over particles.
 
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(c,clo,chi,pp,j,diff,contribution,shell)
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(c,clo,chi,pp,j,vol,wd,wi,m)
 
   do i = 1, Nr
 
     clo = max(1,i-Wcell)
     chi = min(Nr,i+Wcell)
-    shell = r(i)**2*dr+dr**3/12.d0
+    vol = r(i)**2*dr + dr**3*dble(bsplineorder+1)/12.0d0
 
     do c=clo,chi
       do pp=cell_start(c),cell_start(c+1)-1
         j = particle_order(pp)
 
-        diff = abs(r(i) - r_part(j))
-        if (diff <= cutoff_avg) then
-            contribution = f(j) / shell *l_part(j)* Wn(bsplineorder, diff / dr)
-            avg_rho(i) = avg_rho(i) + contribution
+        wd = 0.0d0
+        wi = 0.0d0
+        if (abs(r(i)-r_part(j)) < cutoff_w) wd = Wn(bsplineorder,(r(i)-r_part(j))/dr)
+        if (images .and. abs(r(i)+r_part(j)) < cutoff_w) wi = Wn(bsplineorder,(r(i)+r_part(j))/dr)
+
+        if (wd /= 0.0d0 .or. wi /= 0.0d0) then
+          m = f(j)*l_part(j)/vol
+          avg_rho(i) = avg_rho(i) + m*(wd + wi)
+          if (want_curr) curr(i) = curr(i) + m*p_part(j)*(wd - wi)
         end if
       end do
     end do
@@ -197,12 +162,14 @@ subroutine avg_density
 
   deallocate(cell_start,particle_order)
 
-! Ghost points by reflection, as in density.
+! Ghost points: the density is even in r, the radial current odd.
 
   do i=1,ghost
       avg_rho(1-i) = avg_rho(i)
+      if (want_curr) curr(1-i) = -curr(i)
   end do
 
   avg_rho = factor*avg_rho
+  if (want_curr) curr = factor*curr
 
-end subroutine avg_density
+end subroutine deposit

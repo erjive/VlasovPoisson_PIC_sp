@@ -60,22 +60,22 @@
     ! Constants
     smallpi =  acos(-1.0d0)
 
-    energy = -1.0/(1.0D0+dsqrt(1.0D0+r_part**2)) + 0.5d0*l_part**2/(r_part**2) + 0.5D0*p_part**2
+    energy = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part**2)) + 0.5d0*l_part**2/(r_part**2) + 0.5D0*p_part**2
     er1 = dsqrt((1.d0+energy*(2.d0+l_part**2)-dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+l_part**2)))/(2.d0*energy**2))
     er2 = dsqrt((1.d0+energy*(2.d0+l_part**2)+dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+l_part**2)))/(2.d0*energy**2))
     s1 = 1.d0 + sqrt(1.d0+er1**2)
     s2 = 1.d0 + sqrt(1.d0+er2**2)
     s  = 1.d0 + sqrt(1.d0+r_part**2)
-    argaux = (s1+s2-2.0*s)/(s2-s1)
+    argaux = (s1+s2-2.0d0*s)/(s2-s1)
     Jr = 1.d0/sqrt(-2.d0*energy)-0.5d0*(l_part+sqrt(l_part**2+4.d0))
 
     do i=1,Npart
 
           if (p_part(i)>=0.d0) then
-            eta = dacos(sign(min(abs(argaux(i)),1.0),argaux(i)))
+            eta = dacos(sign(min(abs(argaux(i)),1.0d0),argaux(i)))
 
           else
-            eta = dacos(-sign(min(abs(argaux(i)),1.0),argaux(i)))+smallpi
+            eta = dacos(-sign(min(abs(argaux(i)),1.0d0),argaux(i)))+smallpi
           end if
 
           Qr(i) = eta - sqrt((-2.d0*energy(i))**3) &
@@ -174,10 +174,10 @@
 
     hk1 = drc*dpc*dlc*hk1
     hk2 = drc*dpc*dlc*hk2
-    abs_hk1 = 8.0*smallpi**2*abs(hk1)
-    abs_hk2 = 8.0*smallpi**2*abs(hk2)
-    hk1 = 8.0*smallpi**2*hk1
-    hk2 = 8.0*smallpi**2*hk2
+    abs_hk1 = 8.0d0*smallpi**2*abs(hk1)
+    abs_hk2 = 8.0d0*smallpi**2*abs(hk2)
+    hk1 = 8.0d0*smallpi**2*hk1
+    hk2 = 8.0d0*smallpi**2*hk2
 
 
 ! *****************
