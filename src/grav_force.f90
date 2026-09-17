@@ -41,7 +41,7 @@ subroutine grav_force
         print *, 'For the self-gravitating case you should have rmin=0.'
         print *, 'Aborting ...'
         print *
-        stop
+        stop 1
      else
         call poisson_rk
      end if
@@ -131,7 +131,7 @@ subroutine grav_force
        print *, 'Unknown type of gravitational force'
        print *, 'Aborting ...'
        print *
-       stop
+       stop 1
 
      end if 
 

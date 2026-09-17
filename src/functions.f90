@@ -72,7 +72,7 @@ module functions
 
        print *, "B-spline of order",n,"not implemented (valid orders are 1-4)"
        print *, "Aborting ..."
-       stop
+       stop 1
 
     end if
 
@@ -134,7 +134,7 @@ module functions
     else
        print *, "Weight function of order",n,"not implemented (valid orders are 1-3)"
        print *, "Aborting ..."
-       stop
+       stop 1
     end if
     return 
   end function Wn

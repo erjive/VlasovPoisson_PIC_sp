@@ -56,7 +56,7 @@ module utils
        print *, 'Valid values are "ascii" or "hdf5".'
        print *, 'Aborting ...'
        print *
-       stop
+       stop 1
     end if
 
   end subroutine read_initial_param
@@ -70,7 +70,7 @@ module utils
      print *, 'rmin must be greater than or equal to zero'
      print *, 'Aborting ...'
      print *
-     stop
+     stop 1
   end if
 
   if (rmax<=rmin) then
@@ -78,7 +78,7 @@ module utils
      print *, 'rmin must be smaller than rmax'
      print *, 'Aborting ...'
      print *
-     stop
+     stop 1
   end if
 
 !  if (pmax<=0.d0) then
@@ -102,7 +102,7 @@ module utils
      print *, 'lminc must be greater than or equal to zero'
      print *, 'Aborting ...'
      print *
-     stop
+     stop 1
   end if
 
   if (lmax<0.D0) then
@@ -110,7 +110,7 @@ module utils
      print *, 'lmaxc must be greater than or equal to zero'
      print *, 'Aborting ...'
      print *
-     stop
+     stop 1
   end if
 
   if (lmax<lmin) then
@@ -118,7 +118,7 @@ module utils
      print *, 'lminc must be smaller than lmaxc'
      print *, 'Aborting ...'
      print *
-     stop
+     stop 1
   end if
 
   end subroutine test_consistency

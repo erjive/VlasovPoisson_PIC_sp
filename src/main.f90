@@ -185,7 +185,7 @@ program VP_PIC
         print *, 'Fourth order Runge-Kutta not yet implemented.'
         print *, 'Aborting ...'
         print *
-        stop
+        stop 1
 
 !    Unknown integration method.
 
@@ -194,7 +194,7 @@ program VP_PIC
         print *, 'Unknown integration method.'
         print *, 'Aborting ...'
         print *
-        stop
+        stop 1
 
      end if
 

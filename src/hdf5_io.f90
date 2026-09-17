@@ -47,7 +47,7 @@ contains
        print *, 'ERROR: could not create HDF5 output file in directory ',trim(directory)
        print *, 'Aborting ...'
        print *
-       stop
+       stop 1
     end if
 
   end subroutine open_hdf5_file
