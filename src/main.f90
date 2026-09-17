@@ -217,35 +217,12 @@ program VP_PIC
 !    ***   FIND DENSITY AND FLUX IN r   ***
 !    **************************************
 
-     if (forcetype=="self") then
+!    Density and energies for the output. With self-gravity the averaged
+!    density that Poisson needs is recomputed inside grav_force.
 
-!    Save old value of rho and curr.
-        rho_p  = rho
-!        curr_p = curr
-
-!    Integrate over phase space.
-        !call density
-
-     else
-
-        if (mod(l+1,spatial_output).eq.0) then
-
-!    Integrate over phase space.
-!           call density
-
-!    Save old value of rho and curr in order to calculate the continuity equation
-!           rho_p  = rho
-!           curr_p = curr
-
-        end if
-
-        if (mod(l,spatial_output).eq.0) then
-
-!    Integrate over phase space.
-           call density
-           call energy
-        end if
-
+     if (mod(l,spatial_output).eq.0) then
+        call density
+        call energy
      end if
 
 

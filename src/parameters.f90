@@ -56,7 +56,7 @@ module parameters
 
 
    real(8)   :: m0 = 1.0D0                !< Mass of the particles
-   character(10) :: state = "gaussian"    !< Initial distribution (gaussian,other2,other3)
+   character(10) :: state = "gaussian1"   !< Initial distribution (gaussian1,aa)
 
    !Gaussian distribution
 
@@ -87,7 +87,7 @@ module parameters
    integer        :: bsplineorder = 1     !< B-spline order
    character(20)  :: integrator = "euler"   !< Time integrator method (euler,icn,rk4)
    character(20)  :: spatialorder = "two"        !< Spatial order of discretization.
-   character(20)  :: forcetype = "bg"     !< Type of gravitational force (bg,self)
+   character(20)  :: forcetype = "bg"     !< Background force (bg). Self-gravity: autointeraction; no background: BGtype=null
    character(20)  :: BGtype = "sphere"    !< Type of background. When the gravitational force is fix (sphere,iso,isotrun,nfw,burkert)
    logical        :: autointeraction = .false. !< Self interaction of particles
    !Energy variables

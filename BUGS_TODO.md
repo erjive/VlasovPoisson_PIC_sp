@@ -169,6 +169,14 @@ avanza.
   30.6 s → 30.0 s. Con otro número de hilos el redondeo sigue siendo
   distinto (≤1e-15), como es de esperar.
 
+- [x] **Revisado: `Wn` con `dr` frente a `Sn` con `drc` en la densidad**
+  (nota de A9). Poisson usa `avg_rho` (núcleo `Wn` de ancho `dr`), que
+  conserva la masa: ∫4πr²ρ dr = a0 a ≤4.2e-5 en t1/t2/t3 a lo largo de
+  la corrida. `rho` (núcleo `Sn` de ancho `drc` muestreado cada `dr`) solo
+  se escribe como diagnóstico y no conserva la masa cuando drc≠dr: en t2
+  (drc=0.225, dr=0.1) varía de -3.9% a +4.8%. La dinámica es consistente;
+  `rho` no debe usarse para cantidades integradas.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
@@ -182,23 +190,30 @@ avanza.
   si `autointeraction=.true.`, así que con `autointeraction=.false.`
   (el caso normal para un fondo fijo) se escribe en memoria no
   reservada.
-- [ ] **`initial_data.f90` / `parameters.f90`: `state="gaussian"` (el
+- [x] **`initial_data.f90` / `parameters.f90`: `state="gaussian"` (el
   valor por defecto) no coincide con ninguna rama** (`initial_data.f90`
   solo reconoce `"gaussian1"`, no `"gaussian"`), y no hay `else`/`stop`
   de captura — con la configuración de fábrica, `f` queda en cero en
   silencio.
-- [ ] **`grav_force.f90` / `parameters.f90`: `forcetype="self"` es una
+  *Hecho (A9):* el valor por omisión es `gaussian1`; `read_parameters`
+  rechaza estados desconocidos y `initial_data` tiene un `else` que
+  aborta.
+- [x] **`grav_force.f90` / `parameters.f90`: `forcetype="self"` es una
   opción documentada que no hace nada.** `main.f90` bifurca sobre
   `forcetype=="self"`, pero `grav_force.f90` solo mira `forcetype=="bg"`
   y el booleano independiente `autointeraction`. Con
   `forcetype="self"` y `autointeraction=.false.` las partículas no
   sienten fuerza radial (documentación/código desincronizados).
+  *Hecho (A9):* `forcetype` solo acepta `bg`; la autogravedad es
+  `autointeraction` y sin fondo es `BGtype=null`. La rama de `main.f90`
+  queda en calcular densidad y energía cada `spatial_output` (neutral:
+  era la rama que tomaban todas las corridas válidas).
 - [ ] **Carpeta `src/`: archivos legado sin extensión `.f90`**
   (`analysish`, `poisson`, `poisson_ps`, `reduce_arrays`) no se
   compilan, están desincronizados de sus homónimos activos, y
   `poisson_ps` referencia un módulo `chebyshev` inexistente. Mover a
   `legacy/` o borrar.
-- [ ] **`initial_data.f90`: los estados `compact`, `compact2` y
+- [x] **`initial_data.f90`: los estados `compact`, `compact2` y
   `Plummer` dejan `l_part` en cero para todas las partículas (nunca lo
   asignan), y `density()`/`energy()`/`analysish()` pesan todas sus
   sumas por `l_part(j)` — con `l_part≡0` esas tres rutinas devuelven
@@ -221,6 +236,10 @@ avanza.
   numéricamente, pero es la forma equivocada de indexar. Bug real pero
   dormido: ningún run de esta sesión usó estos tres estados (todo fue
   `aa`/`gaussian1`, que sí asignan `l_part` correctamente).
+  *Hecho (A9):* retirados del código activo a
+  `legacy/initial_data_estados_2D.f90`; `read_parameters` los rechaza.
+  Recuperarlos exige decidir su dependencia en L (y `Plummer` usaba la
+  energía del isócrono).
 - [ ] **`eps` (longitud de suavizado del término centrífugo) está fija
   en `0.0` siempre** (`set_grid_size` en `utils.f90`, línea con
   `eps = 0.0D0`, con el cálculo real comentado justo arriba). Esto

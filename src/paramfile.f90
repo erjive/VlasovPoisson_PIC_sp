@@ -372,11 +372,11 @@ module paramfile
     implicit none
 
     call check_option(output_format,'output_format','ascii hdf5')
-    call check_option(state,'state','gaussian1 aa Plummer compact compact2')
+    call check_option(state,'state','gaussian1 aa')
     call check_option(integrator,'integrator','euler leapfrog yoshida4 rk4')
     call check_option(dt_switch,'dt_switch','fix var')
     call check_option(spatialorder,'spatialorder','two four')
-    call check_option(forcetype,'forcetype','bg self')
+    call check_option(forcetype,'forcetype','bg')
     call check_option(BGtype,'BGtype','null sphere Isochrone Central iso isotrun nfw burkert')
 
     if (rmin < 0.0d0)   call fail('rmin must be greater than or equal to zero.')
