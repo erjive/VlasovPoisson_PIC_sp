@@ -198,6 +198,17 @@ avanza.
   en lminc/lmaxc. Herramienta: `tools/hk_exacto.py`. t1/t2/t3 idénticos
   bit a bit.
 
+- [x] **Estado `checkpoint`** (MEJORAS D1). Lee "r p_r L f" por partícula
+  (exactamente Nrc·Npc·Nlc líneas) y normaliza la masa a a0 como
+  `aa_quad`. Las instantáneas HDF5 ahora incluyen `l_part`, así que
+  cualquier instantánea sirve de punto de partida. Verificado con
+  `aa_quad` (16000 partículas, 2000 pasos, HDF5): sin autogravedad,
+  recargar t=0 y reanudar desde el paso 1000 dan r y p idénticos bit a
+  bit; f difiere en un factor 7.4e-15 (la renormalización de masa) y
+  energía y h_k ≤8.5e-15. Con autogravedad ese factor entra a la
+  fuerza: r, p ≤1.2e-14, h_k ≤4.2e-14. Archivos con menos o más líneas
+  terminan con código 1.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

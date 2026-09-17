@@ -58,7 +58,7 @@ module parameters
 
 
    real(8)   :: m0 = 1.0D0                !< Mass of the particles
-   character(10) :: state = "gaussian1"   !< Initial distribution (gaussian1,aa)
+   character(10) :: state = "gaussian1"   !< Initial distribution (gaussian1,aa,aa_quad,checkpoint)
 
    !Gaussian distribution
 
@@ -72,7 +72,7 @@ module parameters
    real(8)   :: cutoff = 0.0D0            !< Cutoff percentage
 
    !CheckPoint
-   character(100) :: CheckPointfile = "input_file.2D"  !< Initial state file
+   character(100) :: CheckPointfile = "ic.dat"  !< state="checkpoint": one line "r p_r L f" per particle
 
    !Output
    character(100) :: directory = "test"     !< Output directory (may include subdirectories)

@@ -13,7 +13,7 @@
 !!   attributes: time, kinetic_energy, potential_energy, total_energy
 !!   datasets:   rho, avg_rho, curr           (r**2 * quantity, size Nr)
 !!               force, potential             (size Nr, only if autointeraction)
-!!               r_part, p_part, fl            (size Npart; fl = l_part*f)
+!!               r_part, p_part, fl, l_part    (size Npart; fl = l_part*f)
 !!
 !! This mirrors the block structure of the ASCII files (one block per
 !! saved time), just as HDF5 groups instead of text blocks, which keeps
@@ -172,6 +172,7 @@ contains
     call write_dataset_1d(group_id,'r_part',r_part,  Npart)
     call write_dataset_1d(group_id,'p_part',p_part,  Npart)
     call write_dataset_1d(group_id,'fl',    l_part*f,Npart)
+    call write_dataset_1d(group_id,'l_part',l_part,  Npart)
 
     call h5gclose_f(group_id,error)
 

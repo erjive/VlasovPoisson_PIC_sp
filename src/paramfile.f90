@@ -37,6 +37,7 @@ module paramfile
       'time_output', 'spatial_output', 'field_output',           &
       'directory', 'output_format',                              &
       'a0', 'r0', 'p0', 'l0', 'sr', 'sp', 'sl', 'state', 'cutoff', &
+      'checkpointfile',                                          &
       'r1', 'r2',                                                &
       'j1', 'sj1', 'sq1', 'lt1', 'slt1',                         &
       'j2', 'sj2', 'sq2', 'lt2', 'slt2',                         &
@@ -211,6 +212,7 @@ module paramfile
     case ('sl')              ; call get_real(value,sl,name,origin)
     case ('state')           ; call get_str (value,state,name,origin)
     case ('cutoff')          ; call get_real(value,cutoff,name,origin)
+    case ('checkpointfile')  ; call get_str (value,CheckPointfile,name,origin)
 
 !   Radial window of the averaged density.
     case ('r1')              ; call get_real(value,r1,name,origin)
@@ -374,7 +376,7 @@ module paramfile
     implicit none
 
     call check_option(output_format,'output_format','ascii hdf5')
-    call check_option(state,'state','gaussian1 aa aa_quad')
+    call check_option(state,'state','gaussian1 aa aa_quad checkpoint')
     call check_option(integrator,'integrator','euler leapfrog yoshida4 rk4')
     call check_option(dt_switch,'dt_switch','fix var')
     call check_option(spatialorder,'spatialorder','two four')
@@ -577,6 +579,7 @@ module paramfile
     call put_r(u,'sl',sl)
     call put_s(u,'state',state)
     call put_r(u,'cutoff',cutoff)
+    call put_s(u,'checkpointfile',CheckPointfile)
 
     write(u,'(a)') ''
     write(u,'(a)') '# Radial window of the averaged density'

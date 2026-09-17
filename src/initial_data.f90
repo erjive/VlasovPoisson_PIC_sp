@@ -26,6 +26,8 @@
     real(8) :: J3, Q3, w3, s, s1, s2, er1, er2, eta, argaux
 !   Midpoint grid of state aa_quad
     real(8) :: djc, dqc
+!   State checkpoint
+    integer :: unit_ic, ios
 
     smallpi = acos(-1.0d0)
 
@@ -242,6 +244,53 @@
 
       f = a0/(8.D0*smallpi**2*drc*dpc*dlc*sum(f*l_part))*f
 
+      print *, "Initial total mass=", sum(f*l_part)*8.0*smallpi**2*drc*dpc*dlc
+
+    else if(state .eq."checkpoint") then
+
+!     Particles read from a file, one line "r p_r L f" per particle, exactly
+!     Npart = Nrc*Npc*Nlc lines. This is how a state the code cannot build
+!     enters a run: a self-consistent equilibrium plus a perturbation, or a
+!     snapshot of another run (HDF5 output: r_part, p_part, l_part, fl/l_part).
+!
+!     f holds raw values of the distribution function on cells of equal
+!     weight, as in aa_quad, so the same normalization to the mass a0
+!     applies; the diagnostics multiply by the same drc*dpc*dlc, which
+!     cancels.
+
+      open(newunit=unit_ic,file=trim(CheckPointfile),status='old',action='read',iostat=ios)
+      if (ios /= 0) then
+         print *
+         print *, 'state="checkpoint": cannot open ',trim(CheckPointfile)
+         print *, 'Aborting ...'
+         print *
+         stop 1
+      end if
+      do i=1,Npart
+         read(unit_ic,*,iostat=ios) r_part(i),p_part(i),l_part(i),f(i)
+         if (ios /= 0) then
+            print *
+            print *, 'state="checkpoint": ',trim(CheckPointfile), &
+                     ' has fewer than Npart=Nrc*Npc*Nlc =',Npart,' valid lines'
+            print *, 'Aborting ...'
+            print *
+            stop 1
+         end if
+      end do
+      read(unit_ic,*,iostat=ios) raux
+      if (ios == 0) then
+         print *
+         print *, 'state="checkpoint": ',trim(CheckPointfile), &
+                  ' has more than Npart=Nrc*Npc*Nlc =',Npart,' lines'
+         print *, 'Aborting ...'
+         print *
+         stop 1
+      end if
+      close(unit_ic)
+
+      f = a0/(8.D0*smallpi**2*drc*dpc*dlc*sum(f*l_part))*f
+
+      print *, "Read",Npart," particles from ",trim(CheckPointfile)
       print *, "Initial total mass=", sum(f*l_part)*8.0*smallpi**2*drc*dpc*dlc
 
     else
