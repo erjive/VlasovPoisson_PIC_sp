@@ -290,6 +290,29 @@ avanza.
   con wrapper (aquí enlaza HDF5 estático, 3.8 MB) t1/t2/t3 idénticos y
   los 338 datasets y atributos de una salida HDF5 idénticos.
 
+- [x] **Distribuciones de prueba y pruebas agnósticas** (MEJORAS D3).
+  `distribution.f90` (portado del código de L fija) con `dftype` = gauss,
+  bimodal, spiral, king, todas por C(L)=exp(-(L-l0)²/sl²) y king con
+  E(J,L); `jmaxc` por omisión es la ventana de cada una.
+  `tools/hk_exacto.py` generalizado a F0(Q,J,L) no separable. Sin
+  autogravedad, `aa_quad`, L en [1.6,2.4] salvo donde se indica:
+  - gauss: neutral bit a bit (t1/t2/t3 y `aa_quad` con y sin
+    autogravedad); la herramienta repite 2.02e-4 / 2.6e-11 / 2.9e-12;
+  - bimodal (N_J=200, N_Q=40, N_L=16, t≤200): |h_3|,|h_4| ≤ 5.2e-13
+    max|h_1| con analytic y ≤ 7.6e-12 con yoshida4; k≤2 = suma discreta
+    a ≤8.1e-13 (analytic) y ≤2.5e-11 (yoshida4);
+  - spiral con L≈2 fijo (N_J=400): |h_k| llega al máximo en t=710 para
+    k=1..4 (2.2, 25, 1.5e3 y 4.7e5 veces h_k(0)); la estimación lineal
+    t*=-β/ω_J(J0)=721; código = discreto a ≤5e-11;
+  - spiral con sl=0.2 (N_J=200, N_L=16, analytic): la dispersión en L
+    borra el desenrollado, |h_1(700)|/|h_1(0)| = 2.18e-3 (con sl=0.02 el
+    continuo da 2.0; con 0.05, 1.6); en t=1500 el código da 1.87e-2,
+    igual a la suma discreta, frente a 5.0e-5 del continuo: recurrencia
+    por muestreo en L (Nyquist en N_L);
+  - king (N_J=100, N_L=16, t≤100): código = discreto a 1.3e-13 (analytic)
+    y 5.2e-11 (yoshida4) en k=0,1; el error de cuadratura en J converge
+    como h² (cociente 4.00 de N_J=50 a 1600, con L integrado exacto).
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

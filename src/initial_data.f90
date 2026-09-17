@@ -9,6 +9,7 @@
     use parameters
     use arrays
     use utils
+    use distribution
 
     implicit none
 
@@ -202,6 +203,8 @@
 !     the constant is absorbed by the mass normalization below, which uses
 !     drc*dpc*dlc like every diagnostic, so f holds the raw distribution.
 
+      call df0_report
+
       djc = (jmaxc-jminc)/dble(Nrc)
       dqc = 2.0d0*smallpi/dble(Npc)
       print *, "aa_quad: (dJ,dQ,dL)=",djc,dqc,dlc
@@ -222,7 +225,7 @@
             r_part(indx) = raux
             p_part(indx) = paux
             l_part(indx) = laux
-            f(indx) = exp(-sin(0.5d0*Q3)**2/sp**2)*exp(-J3**2/sr**2)*J3**2*exp(-(laux-l0)**2/sl**2)
+            f(indx) = df0(Q3,J3,laux)
 
           end do
         end do

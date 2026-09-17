@@ -18,6 +18,7 @@
 module paramfile
 
   use parameters
+  use distribution, only: df0_Jrange
 
   implicit none
 
@@ -37,7 +38,7 @@ module paramfile
       'time_output', 'spatial_output', 'field_output',           &
       'directory', 'output_format',                              &
       'a0', 'r0', 'p0', 'l0', 'sr', 'sp', 'sl', 'state', 'cutoff', &
-      'checkpointfile',                                          &
+      'checkpointfile', 'dftype',                                &
       'r1', 'r2',                                                &
       'j1', 'sj1', 'sq1', 'lt1', 'slt1',                         &
       'j2', 'sj2', 'sq2', 'lt2', 'slt2',                         &
@@ -213,6 +214,7 @@ module paramfile
     case ('state')           ; call get_str (value,state,name,origin)
     case ('cutoff')          ; call get_real(value,cutoff,name,origin)
     case ('checkpointfile')  ; call get_str (value,CheckPointfile,name,origin)
+    case ('dftype')          ; call get_str (value,dftype,name,origin)
 
 !   Radial window of the averaged density.
     case ('r1')              ; call get_real(value,r1,name,origin)
@@ -375,6 +377,8 @@ module paramfile
 
     implicit none
 
+    real(8) :: djunk
+
     call check_option(output_format,'output_format','ascii hdf5')
     call check_option(state,'state','gaussian1 aa aa_quad checkpoint')
     call check_option(integrator,'integrator','euler leapfrog yoshida4 analytic rk4')
@@ -390,9 +394,11 @@ module paramfile
     if (lminc < 0.0d0)  call fail('lminc must be greater than or equal to zero.')
     if (lmaxc <= lminc) call fail('lmaxc must be greater than lminc.')
 
-!   Radial action range of state aa_quad. The distribution carries
-!   exp(-J**2/sr**2), which at J = 6 sr is 2.3e-16 of its value at J = 0.
-    if (jmaxc <= 0.0d0) jmaxc = 6.0d0*sr
+!   Radial action range of state aa_quad: by default the window of the
+!   distribution (six widths past its last feature, e.g. 6 sr for gauss,
+!   where exp(-36) of the peak is left out; the cut for king).
+    call check_option(dftype,'dftype','gauss bimodal spiral king')
+    if (jmaxc <= 0.0d0) call df0_Jrange(djunk,jmaxc)
     if (jminc < 0.0d0)  call fail('jminc must be greater than or equal to zero.')
     if (jmaxc <= jminc) call fail('jmaxc must be greater than jminc.')
     if (dr <= 0.0d0)    call fail('dr must be positive.')
@@ -580,6 +586,7 @@ module paramfile
     call put_s(u,'state',state)
     call put_r(u,'cutoff',cutoff)
     call put_s(u,'checkpointfile',CheckPointfile)
+    call put_s(u,'dftype',dftype)
 
     write(u,'(a)') ''
     write(u,'(a)') '# Radial window of the averaged density'
