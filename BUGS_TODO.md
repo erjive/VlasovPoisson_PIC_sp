@@ -238,6 +238,16 @@ avanza.
   leapfrog; analytic). ABBA (128 mil partículas): con autogravedad
   19.19 → 17.90 s, sin autogravedad 8.51 → 5.67 s (1.50×).
 
+- [x] **Ventanas del núcleo más anchas que su soporte** (MEJORAS C2,
+  paso 3). `avg_density` recorría 7 celdas y la interpolación de
+  `poisson_rk` 7 nodos por partícula; `Wn` de orden n solo es distinto
+  de cero en floor((n+2)/2) celdas a cada lado (1, 2, 2). Lo demás sumaba
+  ceros exactos. Además el denominador de la cáscara se forma una vez por
+  punto y `Wn` se evalúa una vez para potencial y fuerza. Verificado
+  idéntico bit a bit: t1/t2/t3 y, con autogravedad, `bsplineorder` 1, 2 y
+  3 en t2, t3 y `aa_quad`, más nfw y null. ABBA (128 mil partículas,
+  autogravedad, 300 pasos): 17.49 → 12.42 s (1.41×).
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

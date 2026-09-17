@@ -43,6 +43,7 @@
   real(8) rho0,pi
   real(8) cutoff_interp
   integer :: Wgrid,jc,jlo,jhi
+  real(8) :: w
   character(100) :: filename
 
 ! *******************
@@ -168,9 +169,17 @@
 ! without needing atomics.
 
   cutoff_interp = (dble(bsplineorder)+1.0d0)*dr
-  Wgrid = ceiling(cutoff_interp/dr) + 1
 
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,jc,jlo,jhi)
+! Wn of order n vanishes for |y| >= (n+1)/2. With jc the grid point nearest
+! the particle, every node inside the support satisfies
+! |j-jc| < (n+1)/2 + 1/2, so Wgrid = floor((n+2)/2) nodes on each side
+! (1, 2, 2 for n = 1, 2, 3) hold all nonzero weights. Nodes further out only
+! added exact zeros, so leaving them out, and evaluating Wn once for both
+! sums, does not change the result.
+
+  Wgrid = (bsplineorder+2)/2
+
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,jc,jlo,jhi,w)
 
   do i=1,Npart
 
@@ -181,9 +190,11 @@
     do j=jlo,jhi
       if (abs(r_part(i)-r(j))<=cutoff_interp) then
 
-        pot_part(i)   = pot_part(i) + pot(j)*Wn(bsplineorder,(r_part(i)-r(j))/dr)
+        w = Wn(bsplineorder,(r_part(i)-r(j))/dr)
 
-        force_part(i) = force_part(i) + force(j)*Wn(bsplineorder,(r_part(i)-r(j))/dr)
+        pot_part(i)   = pot_part(i) + pot(j)*w
+
+        force_part(i) = force_part(i) + force(j)*w
 
       end if
     end do

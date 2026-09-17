@@ -187,7 +187,7 @@ subroutine avg_density
   implicit none
 
   integer i,j
-  real(8) :: smallpi,factor,diff,contribution
+  real(8) :: smallpi,factor,diff,contribution,shell
   real(8) :: cutoff_avg
   integer :: Wcell,c,clo,chi,pp
   integer, allocatable :: cell_start(:),particle_order(:)
@@ -219,18 +219,27 @@ subroutine avg_density
   call build_cell_list(cell_start,particle_order)
 
   cutoff_avg = (dble(bsplineorder) + 1.0d0)*dr
-  Wcell = ceiling(cutoff_avg/dr) + 1
+
+! Wn of order n vanishes for |y| >= (n+1)/2, and a particle is filed in the
+! cell of its nearest grid point, so the particles that give grid point i a
+! nonzero weight lie in cells i-Wcell..i+Wcell with Wcell = floor((n+2)/2)
+! (1, 2, 2 for n = 1, 2, 3). Further cells only added exact zeros; leaving
+! them out, and forming the shell denominator once per grid point, does not
+! change the result.
+
+  Wcell = (bsplineorder+2)/2
 
 ! Parallelizing only over "i" (no collapse) means each i is owned by
 ! exactly one thread for its whole inner loop, so the accumulation
 ! into avg_rho(i) is race-free without needing !$OMP ATOMIC.
 
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(c,clo,chi,pp,j,diff,contribution)
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(c,clo,chi,pp,j,diff,contribution,shell)
 
   do i = 1, Nr
 
     clo = max(1,i-Wcell)
     chi = min(Nr,i+Wcell)
+    shell = r(i)**2*dr+dr**3/12.d0
 
     do c=clo,chi
       do pp=cell_start(c),cell_start(c+1)-1
@@ -238,7 +247,7 @@ subroutine avg_density
 
         diff = abs(r(i) - r_part(j))
         if (diff <= cutoff_avg) then
-            contribution = f(j) / (r(i)**2*dr+dr**3/12.d0) *l_part(j)* Wn(bsplineorder, diff / dr)
+            contribution = f(j) / shell *l_part(j)* Wn(bsplineorder, diff / dr)
             avg_rho(i) = avg_rho(i) + contribution
         end if
       end do
