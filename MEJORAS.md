@@ -4,7 +4,42 @@ Inventario de cambios a hacer en este código (distribución en momento angular 
 `l_part`), sacado de comparar su estado actual (rama `fix/bugs-mejoras`, commit
 `74234b1`) con lo que se corrigió, midió o descubrió en `vlasov-poisson_PIC`
 (L fijo, rama `clean/comentarios`). Cada punto dice qué hay hoy aquí, qué se aprendió
-allá y qué cambiar. No se ha modificado nada todavía.
+allá y qué cambiar.
+
+## Estado (rama `mejoras/portar`)
+
+Cada punto se implementó en su propio commit y se verificó antes de seguir; las cifras
+de cada verificación están en `BUGS_TODO.md`.
+
+| punto | estado | commit |
+|---|---|---|
+| A1 energía ½ | hecho | `abb8bc9` |
+| A2 mapa ángulo-acción con L | hecho como herramienta (`tools/aa_numerico_L.py`, `tools/hk_numerico.py`); `analysish` sigue con el isócrono | `ed6e9cb` |
+| A3 cuadratura en (Q,J,L) | hecho (`state=aa_quad`) | `065519a` |
+| A4 cutoff | medido; ya era 0 por omisión | `0fa4e10` |
+| A5 nquad | hecho | `5e11235` |
+| A6 funciones de prueba | hecho | `8203a63` |
+| A7 eps | decidido: eps=0; medido | `0fa4e10` |
+| A8 paso fijo | hecho (`dt_switch`) | `828b79b` |
+| A9 errores dormidos | hechos (estados, forcetype, fondos); nota Wn/drc revisada | `e128127`, `8f079fd` |
+| B1 parámetros por nombre | hecho | `9aad262` |
+| B2 código de salida | hecho | `a5993e4` |
+| B3 directorio | hecho | `e9cb7a9` |
+| B4 semilla | no aplica: no hay estados aleatorios | — |
+| B5 Makefile | hecho (`-w` fuera, `h5fc`) | `506a3df`, `6d8b997` |
+| B6 legado | hecho | `fd39130` |
+| B7 salida de h_k | hecho, con `field_output` | `8203a63` |
+| B8 comentarios | hecho | `23a30ac` |
+| C1 a_k una vez | hecho | `6200fe2` |
+| C2 rendimiento | hecho: 2.16× con autogravedad, 2.39× sin ella; `build_cell_list` sigue serial | `5219f6f`..`75c5779` |
+| C3 integrador analytic | hecho | `7bc1f93` |
+| D1 checkpoint | hecho (y `l_part` en HDF5) | `894a120` |
+| D2 equilibrio F(J,L) | hecho (`tools/equilibrio_L.py`) | `ed6e9cb` |
+| D3 exacto y pruebas agnósticas | hecho (`dftype`, `tools/hk_exacto.py`) | `065519a`, `94e697d` |
+| D4 controles | `tools/delta_phi.py`; el solver lineal con L queda pendiente | `0f446e4` |
+
+Además, encontrados al verificar: h_k NaN con partículas no ligadas (`732250f`) y sumas
+OpenMP no deterministas en energía y h_k (`e6d2011`).
 
 Referencias: `vlasov-poisson_PIC/BUGS_TODO.md`, `vlasov-poisson_PIC/PREGUNTAS_ABIERTAS.md`
 y `vlasov-poisson_PIC/docs/introduccion/vlasov_intro.tex`.

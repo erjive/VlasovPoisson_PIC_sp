@@ -26,3 +26,17 @@ cada `spatial_output` pasos: `hk1.tl`/`hk2.tl` (t, |h_0| … |h_4|) y
 `hk1_complex.tl`/`hk2_complex.tl` (t, Re h_0, Im h_0, …). Las instantáneas de
 partículas y campos se escriben cada `field_output` pasos (múltiplo de
 `spatial_output`; por omisión, igual).
+
+## Herramientas (`tools/`)
+
+| herramienta | para qué |
+|---|---|
+| `posicional_a_par.py` | convierte archivos de parámetros del formato posicional anterior |
+| `hk_exacto.py` | h_k exacto de `state=aa_quad` sin autogravedad (continuo y suma discreta) frente a la corrida |
+| `aa_numerico_L.py` | variables ángulo-acción numéricas con L por partícula en isócrono + tabla (directo e inverso) |
+| `hk_numerico.py` | h_k en las variables verdaderas desde instantáneas HDF5 (necesario con autogravedad) |
+| `equilibrio_L.py` | equilibrio autoconsistente F(J,L) y condición inicial para `state=checkpoint` |
+| `delta_phi.py` | δΦ(r,t) desde HDF5, con resta opcional de una corrida de referencia |
+
+Requieren Python 3 con `numpy` (y `h5py` las que leen HDF5).
+
