@@ -146,6 +146,17 @@ avanza.
   a_k(512)/a_k(20) (1.01253 … 1.03249) hasta los 12 decimales de la
   predicción; las demás salidas, idénticas bit a bit.
 
+- [x] **Función de prueba atada a la condición inicial y h_k solo en
+  magnitud** (MEJORAS A6, B7). Dos funciones de prueba con parámetros
+  propios (`j1 sj1 sq1 lt1 slt1`, ídem con 2; sin darlos toman sp, sr,
+  0, l0, sl), salida `hk1.tl`, `hk2.tl`, `hk1_complex.tl`,
+  `hk2_complex.tl` con 17 cifras (reemplaza `hk.tl`), y `field_output`
+  para la cadencia de instantáneas. Verificado: con valores por omisión
+  hk1 = hk anterior a ≤1.7e-15 y hk2 = hk1; con parámetros propios y
+  p0=0.05, h_k(t=0) de ambas funciones coincide a ≤2.6e-15 (fases a 12
+  decimales) con Python usando a_k exacto (Bessel); `field_output=80`
+  deja las instantáneas pares idénticas y `60` termina con código 1.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

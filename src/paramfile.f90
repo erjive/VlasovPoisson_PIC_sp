@@ -34,10 +34,12 @@ module paramfile
       'rmin', 'rmax', 'rminc', 'rmaxc', 'pminc', 'pmaxc',        &
       'lminc', 'lmaxc', 'pmax',                                  &
       'reduceparticles', 'Nreduce',                              &
-      'time_output', 'spatial_output',                           &
+      'time_output', 'spatial_output', 'field_output',           &
       'directory', 'output_format',                              &
       'a0', 'r0', 'p0', 'l0', 'sr', 'sp', 'sl', 'state', 'cutoff', &
       'r1', 'r2',                                                &
+      'j1', 'sj1', 'sq1', 'lt1', 'slt1',                         &
+      'j2', 'sj2', 'sq2', 'lt2', 'slt2',                         &
       'bsplineorder', 'integrator', 'spatialorder',              &
       'forcetype', 'BGtype', 'autointeraction' ]
 
@@ -193,6 +195,7 @@ module paramfile
 !   Output.
     case ('time_output')     ; call get_int (value,time_output,name,origin)
     case ('spatial_output')  ; call get_int (value,spatial_output,name,origin)
+    case ('field_output')    ; call get_int (value,field_output,name,origin)
     case ('directory')       ; call get_str (value,directory,name,origin)
     case ('output_format')   ; call get_str (value,output_format,name,origin)
 
@@ -210,6 +213,18 @@ module paramfile
 !   Radial window of the averaged density.
     case ('r1')              ; call get_real(value,r1,name,origin)
     case ('r2')              ; call get_real(value,r2,name,origin)
+
+!   Test functions of h_k.
+    case ('j1')              ; call get_real(value,j1,name,origin)
+    case ('sj1')             ; call get_real(value,sj1,name,origin)
+    case ('sq1')             ; call get_real(value,sq1,name,origin)
+    case ('lt1')             ; call get_real(value,lt1,name,origin)
+    case ('slt1')            ; call get_real(value,slt1,name,origin)
+    case ('j2')              ; call get_real(value,j2,name,origin)
+    case ('sj2')             ; call get_real(value,sj2,name,origin)
+    case ('sq2')             ; call get_real(value,sq2,name,origin)
+    case ('lt2')             ; call get_real(value,lt2,name,origin)
+    case ('slt2')            ; call get_real(value,slt2,name,origin)
 
 !   Numerical methods.
     case ('bsplineorder')    ; call get_int (value,bsplineorder,name,origin)
@@ -376,6 +391,27 @@ module paramfile
     if (spatial_output <= 0 .or. time_output <= 0) &
        call fail('time_output and spatial_output must be positive.')
 
+!   Snapshots store grid quantities (density, energy) that are only
+!   recomputed every spatial_output steps, so field_output must be a
+!   multiple of it.
+    if (field_output <= 0) field_output = spatial_output
+    if (mod(field_output,spatial_output) /= 0) &
+       call fail('field_output must be a multiple of spatial_output.')
+
+!   Test functions: unset widths and L centers take the values of the
+!   initial distribution, and are written resolved to params_usados.par.
+    if (sq1 < 0.0d0)  sq1  = sp
+    if (sj1 < 0.0d0)  sj1  = sr
+    if (lt1 < 0.0d0)  lt1  = l0
+    if (slt1 < 0.0d0) slt1 = sl
+    if (sq2 < 0.0d0)  sq2  = sp
+    if (sj2 < 0.0d0)  sj2  = sr
+    if (lt2 < 0.0d0)  lt2  = l0
+    if (slt2 < 0.0d0) slt2 = sl
+    if (sq1 == 0.0d0 .or. sj1 == 0.0d0 .or. slt1 == 0.0d0 .or. &
+        sq2 == 0.0d0 .or. sj2 == 0.0d0 .or. slt2 == 0.0d0) &
+       call fail('The widths of the test functions must be positive.')
+
   end subroutine validate
 
 
@@ -516,6 +552,7 @@ module paramfile
     write(u,'(a)') '# Output'
     call put_i(u,'time_output',time_output)
     call put_i(u,'spatial_output',spatial_output)
+    call put_i(u,'field_output',field_output)
     call put_s(u,'directory',directory)
     call put_s(u,'output_format',output_format)
 
@@ -535,6 +572,19 @@ module paramfile
     write(u,'(a)') '# Radial window of the averaged density'
     call put_r(u,'r1',r1)
     call put_r(u,'r2',r2)
+
+    write(u,'(a)') ''
+    write(u,'(a)') '# Test functions of h_k'
+    call put_r(u,'j1',j1)
+    call put_r(u,'sj1',sj1)
+    call put_r(u,'sq1',sq1)
+    call put_r(u,'lt1',lt1)
+    call put_r(u,'slt1',slt1)
+    call put_r(u,'j2',j2)
+    call put_r(u,'sj2',sj2)
+    call put_r(u,'sq2',sq2)
+    call put_r(u,'lt2',lt2)
+    call put_r(u,'slt2',slt2)
 
     write(u,'(a)') ''
     write(u,'(a)') '# Numerical methods'

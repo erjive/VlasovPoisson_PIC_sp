@@ -79,6 +79,7 @@ module parameters
    integer        :: Nreduce = 100000       !< How often do we do discard particles outside domain?
    integer        :: spatial_output = 10000 !< Spatial output
    integer        :: time_output = 10000    !< Time output
+   integer        :: field_output = 0       !< How often to save particles and grid fields (<=0: every spatial_output)
    integer        :: time_reduce_arr = 10000!< Reduce array size every
    character(20)  :: conv_test = "off"      !< Convergence test switch (on,off)
 
@@ -94,6 +95,16 @@ module parameters
    real(8)        :: total_energy   = 0.D0
    real(8)        :: kinetic  = 0.D0
    real(8)        :: potential= 0.D0
+
+   !Test functions of h_k (analysish.f90). A negative width or L center
+   !means "take the value of the initial distribution": sq=sp, sj=sr,
+   !lt=l0, slt=sl. Resolved when the parameters are read.
+
+   real(8)        :: j1 = 0.0D0, j2 = 0.0D0       !< Center in J
+   real(8)        :: sj1 = -1.0D0, sj2 = -1.0D0   !< Width in J
+   real(8)        :: sq1 = -1.0D0, sq2 = -1.0D0   !< Width in Q
+   real(8)        :: lt1 = -1.0D0, lt2 = -1.0D0   !< Center in L
+   real(8)        :: slt1 = -1.0D0, slt2 = -1.0D0 !< Width in L
 
    !Averaging window
 

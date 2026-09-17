@@ -315,7 +315,11 @@ program VP_PIC
 !    ***   SAVE DATA TO FILE   ***
 !    *****************************
 
-     if (mod(l,spatial_output).eq.0) then
+!    field_output gates the particle and grid snapshot, the bulk of the
+!    disk footprint, so h_k (analysish, every spatial_output steps) can be
+!    sampled finely without an equally frequent snapshot.
+
+     if (mod(l,field_output).eq.0) then
 
        if (output_format=="hdf5") then
           call save_data_hdf5(l)
