@@ -44,6 +44,10 @@ subroutine grav_force
         stop 1
      else
         call poisson_rk
+!       Keep the self-gravity potential apart before the background and the
+!       centrifugal barrier are added on top: the energy needs it with a
+!       factor 1/2 (see energy.f90).
+        potself_part = pot_part
      end if
 
   end if 

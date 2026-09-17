@@ -26,6 +26,7 @@
   real(8), allocatable, dimension(:) :: f          ! Phase space density.
 !  real(8), allocatable, dimension(:) :: f_p          ! Phase space density.
   real(8), allocatable, dimension(:) :: pot_part   ! Potential valuated at the position particle
+  real(8), allocatable, dimension(:) :: potself_part ! Self-gravity part of pot_part (zero without autointeraction)
   real(8), allocatable, dimension(:) :: force_part ! Force applied to the particle.
 
 

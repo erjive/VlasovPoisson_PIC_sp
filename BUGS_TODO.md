@@ -103,6 +103,22 @@ avanza.
   — commit `fix(functions): Sn/Wn now reject any invalid order, not
   just n>4/n>3`
 
+## Resueltos (cont. 6)
+
+- [x] **La energía contaba dos veces la autoenergía gravitatoria**
+  (MEJORAS A1). `energy.f90` sumaba el potencial propio completo por
+  partícula; la energía de interacción lleva ½. Ahora `grav_force`
+  guarda `potself_part` justo después de `poisson_rk` y la energía usa
+  `pot_part - potself_part/2`. Medido con los casos de referencia
+  (Isócrono + autogravedad, a0=1e-3, yoshida4, dt=0.025):
+  t2 (`aa`, t=100) máx |E/E0-1| de 5.87e-4 a 2.52e-7;
+  t3 (`gaussian1`, t=50) de 4.91e-4 a 3.46e-7; t1 (sin autogravedad)
+  sin cambio. Trayectorias, densidades y h_k idénticos bit a bit.
+  Caveat: con `BGtype=sphere` y autogravedad, `grav_force` sobrescribe
+  `pot_part` (y `force_part`) con el fondo y descarta el potencial
+  propio (bug de A9, sin corregir aquí), así que ahí la energía resta
+  ½·potself sin haberlo sumado.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
