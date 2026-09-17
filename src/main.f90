@@ -34,7 +34,7 @@ program VP_PIC
 
   call read_initial_param()
 
-!  call test_consistency()
+  call test_consistency()
 
   call set_grid_size()
 

@@ -65,6 +65,8 @@ module utils
 ! Sanity check.
   subroutine test_consistency
 
+  implicit none
+
   if (rmin<0.0D0) then
      print *
      print *, 'rmin must be greater than or equal to zero'
@@ -97,7 +99,7 @@ module utils
 !     stop
 !  end if
 
-  if (lmin<0.D0) then
+  if (lminc<0.D0) then
      print *
      print *, 'lminc must be greater than or equal to zero'
      print *, 'Aborting ...'
@@ -105,7 +107,7 @@ module utils
      stop 1
   end if
 
-  if (lmax<0.D0) then
+  if (lmaxc<0.D0) then
      print *
      print *, 'lmaxc must be greater than or equal to zero'
      print *, 'Aborting ...'
@@ -113,7 +115,7 @@ module utils
      stop 1
   end if
 
-  if (lmax<lmin) then
+  if (lmaxc<=lminc) then
      print *
      print *, 'lminc must be smaller than lmaxc'
      print *, 'Aborting ...'
