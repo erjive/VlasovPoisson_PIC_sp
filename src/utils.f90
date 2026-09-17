@@ -523,7 +523,8 @@ end subroutine construct_grid
 
   real(8) t,var
 
-  character(20) directory,filename,filestatus
+  character(*) :: directory,filename
+  character(20) :: filestatus
 
 
 ! **************************
@@ -586,7 +587,8 @@ end subroutine construct_grid
 
   real(8), dimension(1:Nr) :: r,var
 
-  character(20) directory,filename,filestatus
+  character(*) :: directory,filename
+  character(20) :: filestatus
 
 
 ! **************************
@@ -666,7 +668,8 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
   real(8), dimension(1:Npart) :: var
 
-  character(20) directory,filename,filestatus
+  character(*) :: directory,filename
+  character(20) :: filestatus
 
 
 ! ***************************
@@ -742,7 +745,8 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
   real(8), dimension(1:Npart) :: var
 
-  character(20) directory,filename,filestatus
+  character(*) :: directory,filename
+  character(20) :: filestatus
 
 
 ! ***************************
@@ -810,7 +814,8 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
   real(8) t,kinetic,potential,energy
 
-  character(20) directory,filename,filestatus
+  character(*) :: directory,filename
+  character(20) :: filestatus
 
 
 ! **************************
@@ -874,7 +879,8 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
   real(8), dimension(0:Nr) :: r,density,current,error
 
-  character(20) directory,filename,filestatus
+  character(*) :: directory,filename
+  character(20) :: filestatus
 
 
 ! **************************
@@ -948,7 +954,8 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
   real(8), dimension(0:Nr) :: r,force,pot
 
-  character(20) directory,filename,filestatus
+  character(*) :: directory,filename
+  character(20) :: filestatus
 
 
 ! **************************
