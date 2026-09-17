@@ -93,15 +93,20 @@ subroutine density
   rho = factor*m0*rho/r**2
   avg_rho = factor*m0*avg_rho/r**2
 
-! Sum over the particles in r1 <= r <= r2, written to vlasov_rhomix.tl.
+! Mean density in the shell r1 <= r <= r2, written to vlasov_rhomix.tl: the
+! mass of the particles inside, 8 pi**2 drc dpc dlc Sum f L, over the volume
+! 4 pi (r2**3 - r1**3)/3.
 
   average_rho = 0.D0
 
   do j=1,Npart
     if (r_part(j)>=r1 .and. r_part(j)<= r2) then
-      average_rho = average_rho + 1.0D0/(r2**2-r1**2)*f(j)*0.25D0/smallpi
+      average_rho = average_rho + f(j)*l_part(j)
     end if
   end do
+
+  average_rho = 8.0D0*smallpi**2*drc*dpc*dlc*average_rho &
+              / (4.0D0*smallpi*(r2**3-r1**3)/3.0D0)
 
   filename = 'vlasov_rhomix'
   call save0Ddata(directory,filename,t,average_rho)

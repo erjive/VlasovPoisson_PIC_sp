@@ -110,7 +110,7 @@ module parameters
 
    !Averaging window
 
-   real(8)        :: r1 = 2.0D0
+   real(8)        :: r1 = 2.0D0            !< Shell r1 <= r <= r2 of vlasov_rhomix.tl (mean density)
    real(8)        :: r2 = 3.0D0
 
 end module parameters
