@@ -36,3 +36,11 @@
 
 # Salidas de reproducir/
 exe/rep/
+
+# LaTeX
+docs/introduccion/*.aux
+docs/introduccion/*.log
+docs/introduccion/*.fls
+docs/introduccion/*.fdb_latexmk
+docs/introduccion/*.toc
+docs/introduccion/*.out

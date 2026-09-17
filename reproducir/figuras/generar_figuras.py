@@ -216,6 +216,16 @@ def espiral():
         print(f'  sigma_L=0.2 t={t[i]:.0f}: codigo {np.abs(e["codigo"][i,1])/np.abs(e["codigo"][0,1]):.2e}'
               f' discreto {np.abs(e["discreto"][i,1])/np.abs(e["discreto"][0,1]):.2e}'
               f' continuo {np.abs(e["continuo"][i,1])/np.abs(e["continuo"][0,1]):.2e}')
+    # Recurrencia por muestreo en L: nodos vecinos separados dL = 0.05 desfasan 2 pi cuando
+    # t = 2 pi/(k |dw/dL| dL); el primero en hacerlo es donde |dw/dL| es mayor (L = 1.6).
+    Ln = 1.6 + (np.arange(16) + 0.5)*0.05
+    wn = (0.15 + c_de(Ln))**-3
+    dw = np.abs(np.diff(wn))
+    print(f'  N_L=16, J=0.15: Delta omega_L total={wn[0]-wn[-1]:.4f}; 2pi/max(dw)={2*np.pi/dw.max():.0f};'
+          f' 2pi/min(dw)={2*np.pi/dw.min():.0f}; 2pi N_L/Delta omega={2*np.pi*16/(wn[0]-wn[-1]):.0f}')
+    for tv in (1100, 1200, 1300, 1400):
+        i = np.argmin(abs(t - tv))
+        print(f'  t={t[i]:.0f}: codigo/continuo = {np.abs(e["codigo"][i,1])/np.abs(e["continuo"][i,1]):.2f}')
     ax[1].axvline(tstar, color=GRIS, ls='--', lw=0.8)
     ax[1].set(xlabel='$t$', ylabel=r'$|h_1(t)|/|h_1(0)|$', title='(b) con dispersión en $L$', ylim=(1e-6, 5))
     ax[1].legend(fontsize=6.5, loc='upper left', bbox_to_anchor=(1.02, 1.0))

@@ -282,6 +282,10 @@ avanza.
     del isócrono (el artefacto de coordenadas) y 2.9e-7 → 1.6e-5 con el
     numérico; con eps=0.1, 0.04936 en t=0 frente a (a_1/a_0)·eps/2=0.0494
     esperado (isócrono: 0.0545).
+    *Corrección:* el 0.04936 usaba el potencial instantáneo, que con la
+    perturbación ya difiere del de equilibrio en t=0 (2.3e-5); en el marco
+    fijo del equilibrio (`hk_numerico.py --equilibrio`) da 0.0494974,
+    exactamente lo esperado, y 1.3e-16 sin perturbación.
 
 - [x] **Rutas de HDF5 fijas a Debian/Ubuntu** (MEJORAS B5). El Makefile
   compila a través de `h5fc` si está en el camino y envuelve el
