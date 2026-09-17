@@ -521,23 +521,38 @@ en $L$ \textbf{todavía no se ha medido}; la sección~\ref{sec:preguntas} lo pro
 
 $F$ se representa con macropartículas $(r,p_r,L,f)$. En cada evaluación de fuerza:
 \begin{enumerate}
-  \item con autogravedad, se deposita la masa en la malla radial con la función de peso
-    $W_n$ (B-spline de orden $n$, ancho $\Delta r$), $\bar\rho(r_i)$;
+  \item con autogravedad, cada partícula (una capa de masa $m_j$ en $r_j$) se deposita en
+    la malla escalonada $r_i=(i-\tfrac12)\Delta r$ con la función de peso $W_n$
+    (B-spline de orden $n=1,2,3$), y la densidad es esa masa entre el volumen que cubre
+    el peso,
+    \begin{equation}
+      \rho_i=\frac{\sum_jm_jW_n\big((r_i-r_j)/\Delta r\big)}{V_i},\qquad
+      V_i=4\pi\Delta r\Big(r_i^2+\frac{n+1}{12}\Delta r^2\Big);
+    \end{equation}
+    cerca del origen se suma también la imagen de cada partícula en $-r_j$, la simetría
+    $f(r,p)=f(-r,-p)$;
   \item se integra Poisson, $\dd\Phi/\dd r=M(r)/r^2$, con Runge--Kutta de segundo orden
     desde el centro, y se ajusta la constante para que $\Phi+r\Phi'\to0$ en el borde;
-  \item se interpola potencial y fuerza a cada partícula con el mismo $W_n$ (así no hay
-    autofuerza), y se suman el fondo y el término centrífugo $L^2/r^3$ de su propio $L$;
+  \item se interpolan potencial y fuerza a cada partícula con el mismo $W_n$ (así no hay
+    autofuerza), usando los nodos espejo para $r<\Delta r$ y la solución kepleriana más
+    allá del último nodo, y se suman el fondo y el término centrífugo $L^2/r^3$;
   \item se avanzan las partículas.
 \end{enumerate}
 Referencias clásicas: Birdsall y Langdon~\cite{birdsall2004}, Hockney y
 Eastwood~\cite{hockney1988}.
 
 \begin{aviso}
-\textsc{detalle numérico: dos densidades.} El código también deposita una densidad
-$\rho$ con la forma $S_n$ de ancho $\Delta r_c$, la celda de las partículas, solo como
-salida. Cuando $\Delta r_c\neq\Delta r$ esa densidad no conserva la masa en la malla: en
-un caso con $\Delta r_c=0.225$, $\Delta r=0.1$, $4\pi\int r^2\rho\,\dd r$ varió entre
-$-3.9\%$ y $+4.8\%$. La que usa Poisson, $\bar\rho$, conserva la masa a $4\times10^{-5}$.
+\textsc{detalle numérico: cómo se verificó el acoplamiento.} Con una esfera de densidad
+uniforme (radio 5, 2000 capas) y partículas de prueba sin masa, la fuerza sobre las
+partículas coincide con $-M(<r)/r^2$ a $6\times10^{-8}$ con $n=2,3$, desde $r=0.01$
+hasta fuera de la malla; ese número es la precisión con que las capas representan la
+esfera. Con una sola capa, la fuerza es nula adentro, $-0.49\,M/R^2$ sobre la capa (el
+límite continuo es $-\tfrac12$) y $-M/r^2$ afuera. Una revisión del código contra estas
+ecuaciones encontró y corrigió que la interpolación ignoraba los nodos espejo (la fuerza
+salía entre 3.7 y 5 veces la exacta en $r=0.01$), que el volumen $V_i$ era el de otra
+función de peso (densidad uniforme sobrestimada en $1+\Delta r^2/12r^2$) y que las
+partículas fuera de la malla no sentían la masa; el detalle está en
+\texttt{BUGS\_TODO.md}.
 \end{aviso}
 
 \subsection{Integradores}
@@ -704,7 +719,7 @@ es decir, a intervalos de tiempo iguales.}
 \toprule
 grupo & configuración \\
 \midrule
-fondos & \texttt{state=aa}, \texttt{Nrc=Npc=60}, \texttt{Nlc=1} ($L=2$), \texttt{a0=1e-4}, sin autogravedad, yoshida4, $t=200$; \texttt{BGtype}$\in$\{iso, isotrun, nfw, burkert\}, \texttt{courant}$=0.5,0.25,0.125$ ($\Delta t=0.025$, $0.0125$, $0.00625$) \\
+fondos & \texttt{state=aa}, \texttt{Nrc=Npc=60}, \texttt{Nlc=1} ($L=2$, nodo en el punto medio de $[1.9995,2.0005]$), \texttt{a0=1e-4}, sin autogravedad, yoshida4, $t=200$; \texttt{BGtype}$\in$\{iso, isotrun, nfw, burkert\}, \texttt{courant}$=0.5,0.25,0.125$ ($\Delta t=0.025$, $0.0125$, $0.00625$) \\
 energía & \texttt{a0=1e-3}, autogravedad, yoshida4, $\Delta t=0.025$: \texttt{aa} con $L\in[1.6,2.4]$ y $t=100$; \texttt{gaussian1} con $t=50$; \texttt{aa} con fondo \texttt{sphere} \\
 \bottomrule
 \end{tabular}
@@ -716,7 +731,7 @@ self}(r_j)$: la energía de interacción cuenta cada par una vez. El código sum
 potencial propio completo; el cambio de energía reportado era $5.9\times10^{-4}$ (estado
 \texttt{aa}) y $4.9\times10^{-4}$ (\texttt{gaussian1}), valores medidos antes de la
 corrección. Con el $\tfrac12$, las corridas de la tabla~\ref{tab:energia} dan
-$2.5\times10^{-7}$, $3.5\times10^{-7}$ y, con fondo \texttt{sphere}, $2.0\times10^{-7}$. La
+$1.9\times10^{-7}$, $2.7\times10^{-7}$ y, con fondo \texttt{sphere}, $1.7\times10^{-7}$. La
 trayectoria nunca estuvo afectada: solo la medida.
 
 \paragraph{Fondos analíticos.} Los fondos \texttt{iso}, \texttt{isotrun}, \texttt{nfw} y
@@ -729,10 +744,10 @@ de 30 cifras), y el error máximo de energía converge a cuarto orden:
 \toprule
 fondo & $\Delta t=0.025$ & $0.0125$ & $0.00625$ & cocientes \\
 \midrule
-iso     & $3.16\times10^{-5}$ & $1.93\times10^{-6}$ & $1.20\times10^{-7}$ & $16.4$, $16.1$ \\
-isotrun & $7.72\times10^{-7}$ & $4.85\times10^{-8}$ & $3.23\times10^{-9}$ & $15.9$, $15.0$ \\
-nfw     & $4.64\times10^{-5}$ & $2.81\times10^{-6}$ & $1.74\times10^{-7}$ & $16.5$, $16.1$ \\
-burkert & $8.14\times10^{-6}$ & $5.00\times10^{-7}$ & $3.11\times10^{-8}$ & $16.3$, $16.1$ \\
+iso     & $3.13\times10^{-5}$ & $1.92\times10^{-6}$ & $1.20\times10^{-7}$ & $16.3$, $16.0$ \\
+isotrun & $7.74\times10^{-7}$ & $4.85\times10^{-8}$ & $3.23\times10^{-9}$ & $16.0$, $15.0$ \\
+nfw     & $4.29\times10^{-5}$ & $2.59\times10^{-6}$ & $1.61\times10^{-7}$ & $16.5$, $16.1$ \\
+burkert & $7.48\times10^{-6}$ & $4.59\times10^{-7}$ & $2.92\times10^{-8}$ & $16.3$, $15.7$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -891,7 +906,7 @@ Newton, $\partial E/\partial J=2\pi/T_r$: $J$ a $1.2\times10^{-15}$ y $Q$ a $4.8
 \end{figure}
 
 En $t=0$ el potencial del código difiere del calculado en Python a lo sumo
-$1.3\times10^{-7}$ en $1\leq r\leq15$, frente a $|\Phi_{\rm self}|\leq1.6\times10^{-3}$: es el
+$1.4\times10^{-7}$ en $1\leq r\leq15$, frente a $|\Phi_{\rm self}|\leq1.6\times10^{-3}$: es el
 desajuste entre el Poisson continuo y el discreto. Durante la corrida
 (figura~\ref{fig:equilibrio}a) el potencial del equilibrio se mueve a lo sumo
 $4.1\times10^{-7}$, el mismo orden; con la perturbación $\varepsilon=0.1$ se mueve 100
@@ -906,7 +921,7 @@ veces más, y con la misma forma de $F$ construida en acciones del isócrono, 23
 $|h_1|/h_0$ & $t=0$ & $t=50$ & $t=100$ \\
 \midrule
 equilibrio, mapa del isócrono & $4.958\times10^{-3}$ & $4.952\times10^{-3}$ & $4.971\times10^{-3}$ \\
-equilibrio, mapa numérico (potencial de equilibrio) & $1.3\times10^{-16}$ & $5.9\times10^{-6}$ & $1.6\times10^{-5}$ \\
+equilibrio, mapa numérico (potencial de equilibrio) & $1.3\times10^{-16}$ & $6.0\times10^{-6}$ & $1.6\times10^{-5}$ \\
 $\varepsilon=0.1$, mapa del isócrono & $5.447\times10^{-2}$ & $4.157\times10^{-2}$ & $4.385\times10^{-2}$ \\
 $\varepsilon=0.1$, mapa numérico (potencial de equilibrio) & $4.950\times10^{-2}$ & $4.659\times10^{-2}$ & $3.889\times10^{-2}$ \\
 \bottomrule
@@ -928,7 +943,7 @@ densidad radial en $t=0$, y el potencial propio instantáneo difiere del de equi
 $2.3\times10^{-5}$, lo que desplaza las acciones hasta $6\times10^{-4}$. Para una
 perturbación, el marco natural es el potencial fijo del equilibrio
 (\texttt{hk\_numerico.py --equilibrio}); para el equilibrio mismo los dos marcos casi
-coinciden ($2.9\times10^{-7}$ en $t=0$ con el instantáneo).
+coinciden ($2.5\times10^{-7}$ en $t=0$ con el instantáneo).
 \end{aviso}
 
 Hasta $t=100$ la respuesta con $\varepsilon=0.1$ decae de $0.0495$ a $0.0389$. Con corridas
