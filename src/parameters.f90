@@ -34,7 +34,7 @@ module parameters
    real(8)   :: pminc = -2.0D0           !< Minimum momentum in the support of f.
    real(8)   :: pmaxc =  2.0D0           !< Maximum momentum in the support of f.
 
-   real(8)   :: lminc = -2.0D0           !< Minimum angular momentum in the support of f.
+   real(8)   :: lminc =  0.0D0           !< Minimum angular momentum in the support of f.
    real(8)   :: lmaxc =  2.0D0           !< Maximum angular momentum in the support of f.
 
    real(8)   :: Fmax = 0.0D0             !< Maximum absolute value of the force.

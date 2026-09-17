@@ -177,6 +177,14 @@ avanza.
   (drc=0.225, dr=0.1) varía de -3.9% a +4.8%. La dinámica es consistente;
   `rho` no debe usarse para cantidades integradas.
 
+- [x] **Sesgo de `cutoff`** (MEJORAS A4). El valor por omisión ya era 0;
+  las entradas del artículo usan 0.01. Medido frente a `cutoff=0`:
+  t1 (`aa`, sin autogravedad) 0.01 → |Δh_k|/|h_k| de 3.7e-3 (k=0) a
+  7.5e-3 (k=4), 0.001 → 5e-4 a 1.3e-3; t2 (autogravedad) 0.01 → 1.7e-2
+  a 2.5e-2, 0.001 → 1.3e-3 a 2.2e-3. A cambio, `cutoff=0` usa 24–34 veces
+  más partículas (t1: 66/91/1575; t2: 160/272/5434) y tarda 10–18 veces
+  más. `exe/input_parameters` conserva 0.01 (configuración del artículo).
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
@@ -251,7 +259,7 @@ avanza.
   `legacy/initial_data_estados_2D.f90`; `read_parameters` los rechaza.
   Recuperarlos exige decidir su dependencia en L (y `Plummer` usaba la
   energía del isócrono).
-- [ ] **`eps` (longitud de suavizado del término centrífugo) está fija
+- [x] **`eps` (longitud de suavizado del término centrífugo) está fija
   en `0.0` siempre** (`set_grid_size` en `utils.f90`, línea con
   `eps = 0.0D0`, con el cálculo real comentado justo arriba). Esto
   significa que el potencial centrífugo $L^2/(2r^2)$ es genuinamente
@@ -278,6 +286,16 @@ avanza.
   `(r,p,l)`) — nadie escribió el equivalente con `l_part`. Pendiente
   de decidir la forma funcional correcta de `eps` en términos de
   `l_part`/`pmax` para reintroducirlo.
+  *Decidido (MEJORAS A7):* se mantiene `eps=0`. Con `eps≠0` el
+  potencial deja de ser el del mapa ángulo-acción (en el código de L fija
+  creó un piso de h_k de ~5e-12). Con los estados activos L ≥ lminc+dlc
+  > 0 (los estados con `l_part=0` se retiraron). Medido con `aa`, sin
+  autogravedad, yoshida4, Nlc=8, cutoff=0: L en [0,0.4] (r_min=0.061)
+  da max|dE/E| 6.35e-8 con dt=0.025 y 4.23e-9 con dt/2 (15×); con L en
+  [0.4,0.8], [1,1.4] y [1.8,2.2], 0 a 8 cifras. El caso del ~350% no se
+  puede reproducir (sus parámetros no quedaron registrados). Si se
+  estudian L muy pequeños, verificar con una prueba de dt. El valor por
+  omisión `lminc=-2` (inválido) pasó a 0.
 - [x] **Investigado y descartado: ¿el corte de la ventana de depósito
   en `density()` (`bsplineorder*drc`/`bsplineorder*dr`) recorta la
   cola del B-spline respecto al código histórico
