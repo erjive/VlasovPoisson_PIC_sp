@@ -157,6 +157,18 @@ avanza.
   decimales) con Python usando a_k exacto (Bessel); `field_output=80`
   deja las instantáneas pares idénticas y `60` termina con código 1.
 
+- [x] **Energía y h_k cambiaban a 1e-15 entre corridas idénticas.**
+  Las reducciones OpenMP de `energy` y `analysish` combinan las sumas
+  parciales en el orden en que terminan los hilos (lo muestra un
+  programa mínimo: la misma suma con 4 hilos dio dos valores en 6
+  repeticiones, también con `schedule(static)`); con 8 cifras de salida
+  no se veía. Ahora cada hilo acumula en local y las partes se suman en
+  orden de hilo. Verificado: tres corridas de t2 (HDF5) y de t3 (ascii)
+  idénticas bit a bit con 4 hilos; `field_output=80` frente a 40,
+  idénticas en las instantáneas comunes y en h_k; tiempo en ABBA
+  30.6 s → 30.0 s. Con otro número de hilos el redondeo sigue siendo
+  distinto (≤1e-15), como es de esperar.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

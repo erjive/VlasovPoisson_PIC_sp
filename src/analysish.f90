@@ -24,6 +24,7 @@
 
     use parameters
     use arrays
+!$  use omp_lib
 
     implicit none
 
@@ -49,6 +50,9 @@
     real(8), save :: ak1(0:mode),ak2(0:mode)  !Angular coefficients, constant for the whole run
     logical, save :: ak_ready = .false.
     real(8) :: w1,w2                          !f * L * B_n(J) * C_n(L) for the current particle
+    integer :: nth,tid                        !Number of threads, thread index
+    complex(8) :: loc1(0:mode),loc2(0:mode)   !Partial sums of one thread
+    complex(8), allocatable :: part1(:,:),part2(:,:)
 
     character(20) filestatus
 
@@ -122,7 +126,22 @@
 ! run. They are left out, which is the continuous extension of the test
 ! function: J -> infinity as E -> 0-, and B(J) -> 0.
 
-    !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,i,w1,w2,expv) REDUCTION(+:hk1,hk2)
+! Each thread sums its own share of particles into a local accumulator,
+! and the shares are added afterwards in thread order. An OpenMP reduction
+! combines the shares in whatever order the threads finish, which changed
+! h_k at 1e-15 from one run to the next; this way the result is the same to
+! the last bit in every run with the same number of threads.
+
+    nth = 1
+!$  nth = omp_get_max_threads()
+    allocate(part1(0:mode,0:nth-1),part2(0:mode,0:nth-1))
+    part1 = (0.d0,0.d0)
+    part2 = (0.d0,0.d0)
+
+    !$OMP PARALLEL PRIVATE(j,i,w1,w2,expv,tid,loc1,loc2)
+    loc1 = (0.d0,0.d0)
+    loc2 = (0.d0,0.d0)
+    !$OMP DO SCHEDULE(STATIC)
     do j=1,Npart
 
       if (energy(j) >= 0.d0) cycle
@@ -130,17 +149,28 @@
       w1 = f(j)*l_part(j)*Jr(j)**2*exp(-(Jr(j)-j1)**2/sj1**2)*exp(-(l_part(j)-lt1)**2/slt1**2)
       w2 = f(j)*l_part(j)*Jr(j)**2*exp(-(Jr(j)-j2)**2/sj2**2)*exp(-(l_part(j)-lt2)**2/slt2**2)
 
-      hk1(0) = hk1(0) + w1*ak1(0)
-      hk2(0) = hk2(0) + w2*ak2(0)
+      loc1(0) = loc1(0) + w1*ak1(0)
+      loc2(0) = loc2(0) + w2*ak2(0)
 
       expv = exp(-ii*Qr(j))
       do i=1,mode
-        hk1(i) = hk1(i) + w1*ak1(i)*expv**i
-        hk2(i) = hk2(i) + w2*ak2(i)*expv**i
+        loc1(i) = loc1(i) + w1*ak1(i)*expv**i
+        loc2(i) = loc2(i) + w2*ak2(i)*expv**i
       end do
 
     end do
-    !$OMP END PARALLEL DO
+    !$OMP END DO
+    tid = 0
+!$  tid = omp_get_thread_num()
+    part1(:,tid) = loc1
+    part2(:,tid) = loc2
+    !$OMP END PARALLEL
+
+    do tid=0,nth-1
+      hk1 = hk1 + part1(:,tid)
+      hk2 = hk2 + part2(:,tid)
+    end do
+    deallocate(part1,part2)
 
     hk1 = drc*dpc*dlc*hk1
     hk2 = drc*dpc*dlc*hk2

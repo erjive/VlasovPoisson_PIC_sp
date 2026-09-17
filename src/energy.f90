@@ -28,11 +28,15 @@ subroutine energy
   use arrays
   use functions
   use utils
+!$ use omp_lib
 ! Declare variables.
 
   implicit none
 
   integer i,j
+  integer :: nth,tid
+  real(8) :: lk,lp,le                        ! Partial sums of one thread
+  real(8), allocatable :: part(:,:)
   real(8) :: smallpi,factor
 
   smallpi = acos(-1.0d0)
@@ -54,14 +58,38 @@ subroutine energy
   kinetic = 0.D0
   potential = 0.D0
 
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) REDUCTION (+:kinetic,potential,total_energy)
+! Each thread sums its share into local accumulators, added afterwards in
+! thread order: an OpenMP reduction combines them in the order the threads
+! finish, which changed the energies at 1e-16 from run to run. This way they
+! are the same to the last bit for a given number of threads.
+
+  nth = 1
+!$ nth = omp_get_max_threads()
+  allocate(part(3,0:nth-1))
+  part = 0.0D0
+
+  !$OMP PARALLEL PRIVATE(i,tid,lk,lp,le)
+  lk = 0.0D0
+  lp = 0.0D0
+  le = 0.0D0
+  !$OMP DO SCHEDULE(STATIC)
   do i=1,Npart
-    kinetic   = kinetic + 0.5D0*p_part(i)**2*f(i)*l_part(i)
-    potential = potential + (pot_part(i) - 0.5D0*potself_part(i))*f(i)*l_part(i)
-    total_energy = total_energy &
-                 + (0.5D0*p_part(i)**2 + pot_part(i) - 0.5D0*potself_part(i))*f(i)*l_part(i)
+    lk = lk + 0.5D0*p_part(i)**2*f(i)*l_part(i)
+    lp = lp + (pot_part(i) - 0.5D0*potself_part(i))*f(i)*l_part(i)
+    le = le + (0.5D0*p_part(i)**2 + pot_part(i) - 0.5D0*potself_part(i))*f(i)*l_part(i)
   end do
-  !$OMP END PARALLEL DO
+  !$OMP END DO
+  tid = 0
+!$ tid = omp_get_thread_num()
+  part(:,tid) = [lk,lp,le]
+  !$OMP END PARALLEL
+
+  do tid=0,nth-1
+    kinetic      = kinetic + part(1,tid)
+    potential    = potential + part(2,tid)
+    total_energy = total_energy + part(3,tid)
+  end do
+  deallocate(part)
 
   kinetic   = factor * kinetic
   potential = factor * potential
