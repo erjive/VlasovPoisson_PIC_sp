@@ -248,6 +248,19 @@ avanza.
   3 en t2, t3 y `aa_quad`, más nfw y null. ABBA (128 mil partículas,
   autogravedad, 300 pasos): 17.49 → 12.42 s (1.41×).
 
+- [x] **Avance de yoshida4 y reflexión en el origen seriales** (MEJORAS
+  C2, paso 4). Seis pasadas de arreglo más dos copias por paso pasan a
+  cuatro ciclos paralelos (cada kick fusionado con el drift siguiente,
+  sin copias), y la reflexión en r=0 es paralela y evalúa `rmin==0` una
+  vez. Verificado idéntico bit a bit: t1/t2/t3, bsplineorder 2,
+  leapfrog, euler, `dt_switch=var`, `aa_quad` con autogravedad, null, y
+  un caso con L∈[0,0.02] que cruza el origen (caótico: cualquier
+  diferencia se amplificaría). ABBA (128 mil partículas): con
+  autogravedad 12.40 → 11.58 s, sin autogravedad 5.59 → 4.34 s.
+  Total de C2: con autogravedad 25.04 → 11.58 s (2.16×), sin autogravedad
+  10.38 → 4.34 s (2.39×). Nota para A7: ese caso de L∈[0,0.02] da un
+  error de energía de 1.4e14 (órbitas casi radiales por el origen).
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

@@ -165,9 +165,13 @@ program VP_PIC
 
 !    Save old time step.
 
-      r_part_p = r_part
+!    Only euler and leapfrog read the values at the start of the step;
+!    yoshida4 updates in place.
 
-      p_part_p = p_part
+     if (integrator=='euler' .or. integrator=='leapfrog') then
+       r_part_p = r_part
+       p_part_p = p_part
+     end if
 
  
 !    Euler method (forward differencing in time, first order).
@@ -200,19 +204,38 @@ program VP_PIC
 
     else if (integrator == 'yoshida4') then
 
-      r_part = r_part_p + yg_c1*dt*p_part_p
-      call grav_force()
-      p_part = p_part_p + yg_d1*dt*force_part
+!   Each kick is fused with the drift that follows it into one parallel
+!   pass over the particles; the per-particle arithmetic is unchanged.
 
-      r_part = r_part + yg_c2*dt*p_part
+      !$OMP PARALLEL DO SCHEDULE(STATIC)
+      do i=1,Npart
+        r_part(i) = r_part(i) + yg_c1*dt*p_part(i)
+      end do
+      !$OMP END PARALLEL DO
       call grav_force()
-      p_part = p_part + yg_d2*dt*force_part
 
-      r_part = r_part + yg_c3*dt*p_part
+      !$OMP PARALLEL DO SCHEDULE(STATIC)
+      do i=1,Npart
+        p_part(i) = p_part(i) + yg_d1*dt*force_part(i)
+        r_part(i) = r_part(i) + yg_c2*dt*p_part(i)
+      end do
+      !$OMP END PARALLEL DO
       call grav_force()
-      p_part = p_part + yg_d3*dt*force_part
 
-      r_part = r_part + yg_c4*dt*p_part
+      !$OMP PARALLEL DO SCHEDULE(STATIC)
+      do i=1,Npart
+        p_part(i) = p_part(i) + yg_d2*dt*force_part(i)
+        r_part(i) = r_part(i) + yg_c3*dt*p_part(i)
+      end do
+      !$OMP END PARALLEL DO
+      call grav_force()
+
+      !$OMP PARALLEL DO SCHEDULE(STATIC)
+      do i=1,Npart
+        p_part(i) = p_part(i) + yg_d3*dt*force_part(i)
+        r_part(i) = r_part(i) + yg_c4*dt*p_part(i)
+      end do
+      !$OMP END PARALLEL DO
       if (sync) call grav_force()
 
 !    Exact advance in angle-action variables (no self-gravity only).
@@ -245,16 +268,16 @@ program VP_PIC
 
 !   At the origin impose symmetry condition f(r,p) = f(-r,-p)
 
-    do i=1,Npart
-
-      if (rmin == 0 .and. r_part(i)<0.d0) then
-
-        r_part(i) = -r_part(i)
-        p_part(i) = -p_part(i)
-
-      end if
-
-    end do
+    if (rmin == 0) then
+      !$OMP PARALLEL DO SCHEDULE(STATIC)
+      do i=1,Npart
+        if (r_part(i)<0.d0) then
+          r_part(i) = -r_part(i)
+          p_part(i) = -p_part(i)
+        end if
+      end do
+      !$OMP END PARALLEL DO
+    end if
 
 !    **************************************
 !    ***   FIND DENSITY AND FLUX IN r   ***
