@@ -40,3 +40,16 @@ partículas y campos se escriben cada `field_output` pasos (múltiplo de
 
 Requieren Python 3 con `numpy` (y `h5py` las que leen HDF5).
 
+## Video 3D de la DF gaussiana
+
+```bash
+cd exe && ./VP_PIC ../reproducir/video/df_gauss.par && cd ..   # 43 s, instantáneas HDF5 (0.7 GB)
+python3 reproducir/video/video_df.py --valida                  # comprueba el ángulo azimutal
+python3 reproducir/video/video_df.py --procesos 6              # 601 cuadros 1920x1080 y exe/rep/video/df_gauss_3d.mp4
+```
+
+Muestra la misma distribución en $(r,p_r,L)$, $(Q,J,L)$ y $(x,y,z)$ hasta t=2400 (unos
+23 periodos radiales). En $(x,y,z)$ cada partícula (una capa esférica) se dibuja con
+6 estrellas en planos orbitales aleatorios; su ángulo en el plano se obtiene de
+dψ/dt = L/r² (validado contra integración directa a 3e-5 rad).
+
