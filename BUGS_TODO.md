@@ -132,6 +132,29 @@ avanza.
   compilan, están desincronizados de sus homónimos activos, y
   `poisson_ps` referencia un módulo `chebyshev` inexistente. Mover a
   `legacy/` o borrar.
+- [ ] **`initial_data.f90`: los estados `compact`, `compact2` y
+  `Plummer` dejan `l_part` en cero para todas las partículas (nunca lo
+  asignan), y `density()`/`energy()`/`analysish()` pesan todas sus
+  sumas por `l_part(j)` — con `l_part≡0` esas tres rutinas devuelven
+  **idénticamente cero** (`rho`, `avg_rho`, energía cinética/potencial/
+  total, y los cinco $h_k$), aunque `f` sea distinto de cero. Mientras
+  tanto, la normalización de masa de `compact`/`compact2`
+  (`f = f*drc*dpc*8π²`, sin `dlc` ni `l_part`) sí asume un sistema sin
+  dependencia en $L$ — inconsistente con lo que exigen las rutinas de
+  diagnóstico. Encontrado comparando contra el código histórico
+  (`Lfix` escalar), que manejaba exactamente este caso con una rama
+  explícita `if (Lfix==0.0d0) then factor=1.0 else ... endif`
+  ("Zero Angular Momentum" vs "Include Angular Momentum") en
+  `density.f90`/`energy.f90` — esa rama sigue **comentada** en el
+  código actual (nunca se restauró al migrar de `Lfix` escalar a
+  `l_part` arreglo), y `compact`/`compact2`/`Plummer` nunca se
+  actualizaron para poblar `l_part` con algo sensato. Bono menor:
+  `Plummer` (línea ~112) además indexa `l_part(i)` con `i` el índice
+  de malla en `r` (1..Nrc), no el índice real de partícula
+  `(i-1)*Npc+j` — con `l_part` en cero en todos lados da lo mismo
+  numéricamente, pero es la forma equivocada de indexar. Bug real pero
+  dormido: ningún run de esta sesión usó estos tres estados (todo fue
+  `aa`/`gaussian1`, que sí asignan `l_part` correctamente).
 - [ ] **`eps` (longitud de suavizado del término centrífugo) está fija
   en `0.0` siempre** (`set_grid_size` en `utils.f90`, línea con
   `eps = 0.0D0`, con el cálculo real comentado justo arriba). Esto
@@ -176,6 +199,42 @@ avanza.
   `avg_density()` todavía usa `(bsplineorder+1)*dr` — inconsistencia
   de estilo entre dos rutinas que calculan lo mismo, ambos cortes son
   seguros igual.
+- [ ] **`functions.f90`/`density.f90`/`poisson_rk.f90`: `Wn` asume
+  implícitamente `drc==dr`, pero ningún `input_parameters` real
+  cumple eso.** El paper define
+  $W_m(R_k-r_j):=\int S_m(r-r_j)\,b_0\!\left(\frac{r-R_k}{\Delta
+  r}\right)dr$ — la convolución genuina entre el shape function de la
+  partícula (ancho $\Delta$, que en el código es `drc`, ver
+  `Sn(bsplineorder,(r(i)-r_part(j))/drc,drc)` en `density()`) y la
+  caja de la malla espacial (ancho $\Delta r$=`dr`). El comentario en
+  `functions.f90` ("the weight function W_n are just the S_(n+1)
+  function multiplied by dx") sólo es válido cuando `drc==dr` — ahí
+  la convolución colapsa a la recursión estándar de B-splines. Pero
+  `avg_density()`/`poisson_rk()` llaman `Wn(bsplineorder,(r-r_part)/dr)`,
+  es decir usan como ancho del shape function únicamente `dr`,
+  **ignorando por completo `drc`**. Confirmado con los
+  `input_parameters` reales: `input_parameters` tiene `dr=0.03125`
+  vs `drc=(rmaxc-rminc)/Nrc=(5-1)/400=0.01`; `input_article_N1e3`
+  tiene `dr=0.1` vs `drc=(10-1)/240=0.0375` — en ambos casos `drc` y
+  `dr` difieren por un factor ~2-3×, no son iguales en ningún caso de
+  uso real inspeccionado. El resultado es que la misma partícula, con
+  el mismo shape function nominal de ancho `drc`, se trata con dos
+  anchos distintos según qué cantidad se calcule: `rho` (diagnóstico
+  puntual, `vlasov_density`) usa correctamente `drc`, pero `avg_rho`
+  — la fuente del lado derecho de la ecuación de Poisson, y también
+  el kernel usado para interpolar `pot`/`force` de vuelta a las
+  partículas en `poisson_rk.f90` — usa `dr` en su lugar. No es
+  catastrófico (la integral/masa total de la convolución no depende
+  de qué ancho se use, sólo la forma), pero sí afecta la resolución
+  espacial real del depósito y de la fuerza autogravitante sentida
+  por las partículas: con `drc` bastante más chico que `dr` (caso
+  típico visto arriba), el kernel efectivamente usado es más
+  ancho/suave que el que debería representar a la partícula.
+  Pendiente de decidir la forma correcta de `Wn` cuando `drc≠dr`
+  (convolución explícita de dos anchos distintos, no la recursión de
+  un solo ancho) y cuantificar el efecto numérico antes de corregir.
+  Encontrado en una revisión de las ecuaciones del código contra
+  `Vlasov_Poisson_evolutions/main.md` (el paper de referencia).
 
 ## Mejoras de rendimiento
 
