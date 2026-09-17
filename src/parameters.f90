@@ -72,10 +72,10 @@ module parameters
    real(8)   :: cutoff = 0.0D0            !< Cutoff percentage
 
    !CheckPoint
-   character(100) :: CheckPointfile = "ic.dat"  !< state="checkpoint": one line "r p_r L f" per particle
+   character(256) :: CheckPointfile = "ic.dat"  !< state="checkpoint": one line "r p_r L f" per particle
 
    !Output
-   character(100) :: directory = "test"     !< Output directory (may include subdirectories)
+   character(256) :: directory = "test"     !< Output directory (may include subdirectories)
    character(20)  :: output_format = "ascii" !< Output format (ascii,hdf5)
    logical        :: reduceparticles = .false. !< Do we discard particles outside the domain? 
    integer        :: Nreduce = 100000       !< How often do we do discard particles outside domain?
