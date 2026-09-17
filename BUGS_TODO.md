@@ -129,6 +129,15 @@ avanza.
   anterior (dt entre 0.570 y 0.982 por bloque) y `fix` mantiene
   dt=0.53768.
 
+- [x] **h_k salía NaN toda la corrida si había una partícula no ligada.**
+  Encontrado al verificar C1: el caso de referencia t3 (`gaussian1`,
+  r0=5, L en [1.8,2.2]) tiene 10 de 782 partículas con E>0, para las
+  que J y Q no existen; `analysish` sumaba NaN (ya pasaba en la versión
+  original). Ahora se omiten (Φ=0), que es la extensión continua de
+  B(J)=J² exp(-J²/sr²) cuando E→0⁻. Verificado: t1 y t2 idénticos bit a
+  bit; h_k(t=0) de t3 coincide a 1e-15 con un cálculo independiente en
+  Python sobre las 772 partículas ligadas.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

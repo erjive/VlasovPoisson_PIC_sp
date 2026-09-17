@@ -92,8 +92,15 @@
 
     hk = (0.d0,0.d0)
 
+! Unbound particles (E >= 0) have no action-angle variables: the formulas
+! above give NaN, and a single one turned every h_k into NaN for the whole
+! run. They are left out, which is the continuous extension of the test
+! function: J -> infinity as E -> 0-, and B(J) = J**2 exp(-J**2/sr**2) -> 0.
+
     !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,i,w,expv) REDUCTION(+:hk)
     do j=1,Npart
+
+      if (energy(j) >= 0.d0) cycle
 
       w = f(j)*l_part(j)*Jr(j)**2*exp(-Jr(j)**2/sr**2)*exp(-(l_part(j)-l0)**2/sl**2)
 
