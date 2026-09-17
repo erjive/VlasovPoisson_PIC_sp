@@ -136,6 +136,7 @@ program VP_PIC
      call save_data_hdf5(0)
   else
      call save_data()
+     call save_series()
   end if
 
 
@@ -279,6 +280,7 @@ program VP_PIC
 
      if (mod(l,spatial_output).eq.0) then
         call analysish
+        if (output_format/="hdf5") call save_series()
      end if
 
 !    Discard particles beyond rmax.

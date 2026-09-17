@@ -33,3 +33,6 @@
 .config
 .timestart
 .timeend
+
+# Salidas de reproducir/
+exe/rep/

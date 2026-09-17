@@ -330,6 +330,29 @@ end subroutine construct_grid
 
 
   !> Save all the data to the corresponding files
+  !> Time series (energies, potential and force at the centre), written every
+  !! spatial_output steps, when they are computed, independently of the
+  !! snapshot cadence field_output (ASCII output; HDF5 keeps them as
+  !! attributes of each snapshot).
+  subroutine save_series
+
+    character(100) :: filename
+
+    filename = 'vlasov_energy'
+    call save0Ddata(directory,filename,t,total_energy)
+    filename = 'vlasov_k_phi_e'
+    call save_energy(directory,filename,t,kinetic,potential,total_energy)
+
+    if (autointeraction) then
+       filename = 'vlasov_potential_r0'
+       call save0Ddata(directory,filename,t,pot(1))
+       filename = 'vlasov_force_r0'
+       call save0Ddata(directory,filename,t,force(1))
+    end if
+
+  end subroutine save_series
+
+
   subroutine save_data
 
     character(100) :: filename     !< Name of output file
@@ -354,11 +377,6 @@ end subroutine construct_grid
     call save1Ddata(directory,filename,Nr,t,r(1:Nr),r(1:Nr)**2*avg_rho(1:Nr))
     filename = 'vlasov_curr'
     call save1Ddata(directory,filename,Nr,t,r(1:Nr),r(1:Nr)**2*curr(1:Nr))
-    filename = 'vlasov_energy'
-    call save0Ddata(directory,filename,t,total_energy)
-    filename = 'vlasov_k_phi_e'
-    call save_energy(directory,filename,t,kinetic,potential,total_energy)
-
 
 !   Save force and potential.
     if (autointeraction) then
@@ -369,11 +387,6 @@ end subroutine construct_grid
        filename = 'vlasov_potential'
        call save1Ddata(directory,filename,Nr,t,r(1:Nr),pot(1:Nr))
 
-       filename = 'vlasov_potential_r0'
-       call save0Ddata(directory,filename,t,pot(1))
-
-       filename = 'vlasov_force_r0'
-       call save0Ddata(directory,filename,t,force(1))
     end if
 
   end subroutine save_data

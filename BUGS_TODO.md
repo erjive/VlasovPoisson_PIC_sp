@@ -368,6 +368,18 @@ afecta resultados):
   afecta a `rho`, que ya no conserva la masa cuando drc≠dr.
 - [ ] **La salida ASCII `vlasov_fdist.2D` guarda L·f sin L**, así que no
   sirve para `checkpoint`; la HDF5 sí (`l_part`).
+- [x] **Las series de energía seguían a `field_output`** (encontrado al
+  armar `reproducir/`). `vlasov_energy.tl`, `vlasov_k_phi_e.tl` y los
+  valores en r=0 se escribían dentro de `save_data`, así que con
+  `field_output=Nt` solo quedaban t=0 y el final, y un "máximo error de
+  energía" salía de dos muestras (2e-8 en lugar de 3.2e-5 con iso). Ahora
+  `save_series` los escribe cada `spatial_output` (salida ASCII).
+  Verificado: t1/t2/t3 idénticos; con `field_output=80` la serie de
+  energía de t2 es idéntica, 101 filas, a la de `field_output=40`.
+  Nota: las cifras de convergencia de los fondos de más arriba (cocientes
+  10–26 en iso y burkert) se midieron con muestreo distinto según dt; con
+  muestreo a intervalos de tiempo iguales (`reproducir/corridas/09_fondos`)
+  los cocientes son 15.0–16.5 en los cuatro fondos.
 - [ ] **Masa fuera de la malla**: Poisson ignora la masa con r > r(Nr)
   (ahora con aviso); si importa, aumentar `rmax`.
 
