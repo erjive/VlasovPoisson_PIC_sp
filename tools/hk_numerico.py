@@ -11,8 +11,14 @@ partícula con su L. h_k usa la función de prueba n de la corrida (params_usado
 igual que el código; drc dpc dlc se reconstruye de los parámetros. Sin autogravedad
 coincide con hk{n}_complex.tl hasta la precisión del mapa.
 
-Uso:  python3 tools/hk_numerico.py <directorio> [--fn 1] [--cada 1]
-Escribe <directorio>/hk{n}_numerico.tl con t, Re h_0, Im h_0, ..., Re h_4, Im h_4.
+Marco: por omisión, el potencial instantáneo de cada instantánea. Con --equilibrio
+<archivo _equilibrio.npz de equilibrio_L.py> se usa el potencial propio fijo de ese
+equilibrio, que es el marco de una perturbación: en el instantáneo, una perturbación
+eps cos Q ya cambia el potencial en t=0 y con él las acciones.
+
+Uso:  python3 tools/hk_numerico.py <directorio> [--fn 1] [--cada 1] [--equilibrio eq.npz]
+Escribe <directorio>/hk{n}_numerico.tl (o hk{n}_numerico_eq.tl con --equilibrio) con
+t, Re h_0, Im h_0, ..., Re h_4, Im h_4.
 """
 import argparse, os, sys
 import numpy as np, h5py
@@ -26,6 +32,7 @@ def main():
     ap.add_argument('dir')
     ap.add_argument('--fn', type=int, default=1, choices=[1, 2])
     ap.add_argument('--cada', type=int, default=1, help='usar una de cada n instantáneas')
+    ap.add_argument('--equilibrio', help='_equilibrio.npz: potencial propio fijo')
     a = ap.parse_args()
 
     raw = leer_par(os.path.join(a.dir, 'params_usados.par'))
@@ -48,10 +55,16 @@ def main():
     r_malla = h['grid/r'][()]
     pasos = sorted([g for g in h if g.startswith('step_')], key=lambda g: int(g.split('_')[1]))[::a.cada]
     filas = []
+    fijo = None
+    if a.equilibrio:
+        eq = np.load(a.equilibrio)
+        fijo = MapaAA(eq['r'], eq['phi_self'])
     for g in pasos:
         G = h[g]
         r, p, L, fl = G['r_part'][()], G['p_part'][()], G['l_part'][()], G['fl'][()]
-        if sg:
+        if fijo is not None:
+            m = fijo
+        elif sg:
             m = MapaAA(r_malla, G['potential'][()] - phi_iso(r_malla))
         else:
             m = MapaAA()
@@ -63,7 +76,7 @@ def main():
         filas.append([G.attrs['time']] + [x for z in hk for x in (z.real, z.imag)])
         print(f"t={G.attrs['time']:9.3f}  |h_0|={abs(hk[0]):.6e}  |h_1|={abs(hk[1]):.6e}  no ligadas={np.sum(~lig)}",
               flush=True)
-    salida = os.path.join(a.dir, f'hk{a.fn}_numerico.tl')
+    salida = os.path.join(a.dir, f'hk{a.fn}_numerico' + ('_eq' if fijo is not None else '') + '.tl')
     np.savetxt(salida, np.array(filas), fmt='%24.16e')
     print('escrito', salida)
 

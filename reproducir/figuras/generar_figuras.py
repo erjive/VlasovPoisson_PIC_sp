@@ -99,7 +99,7 @@ def envolvente():
         m = t <= 150
         coefs[sl] = np.polyfit(t[m]**2, np.log(y[m]), 1)[0]
         ax[1].plot(t[m]**2, np.log(y[m]), color=col)
-    ax[0].set(xlabel='$t$', ylabel=r'$|h_1(t)|/|h_1(0)|$', title='(a) solución exacta, $k=1$', ylim=(1e-8, 2))
+    ax[0].set(xlabel='$t$', ylabel=r'$|h_1(t)|/|h_1(0)|$', title='(a) solución exacta, $k=1$', ylim=(1e-2, 1.5))
     ax[0].legend()
     ax[1].set(xlabel='$t^2$', ylabel=r'$\ln|h_1/h_1(0)|$', title=r'(b) tramo inicial ($t\leq150$)')
     guarda(fig, 'envolvente')
@@ -122,7 +122,8 @@ def envolvente():
 def verificacion():
     print('verificacion')
     V = os.path.join(REP, '08_verificacion')
-    fig, ax = plt.subplots(1, 3, figsize=(11, 3.0))
+    fig, ax = plt.subplots(1, 3, figsize=(12, 3.2))
+    fig.subplots_adjust(wspace=0.38)
     e = np.load(os.path.join(V, 'gauss_y4', 'hk1_exacto.npz'))
     for k, col in zip(range(1, 5), [AZUL, NAR, VER, ROJO]):
         ax[0].semilogy(e['t'], np.abs(e['codigo'][:, k]), color=col, label=f'$k={k}$')
@@ -217,7 +218,7 @@ def espiral():
               f' continuo {np.abs(e["continuo"][i,1])/np.abs(e["continuo"][0,1]):.2e}')
     ax[1].axvline(tstar, color=GRIS, ls='--', lw=0.8)
     ax[1].set(xlabel='$t$', ylabel=r'$|h_1(t)|/|h_1(0)|$', title='(b) con dispersión en $L$', ylim=(1e-6, 5))
-    ax[1].legend(fontsize=6.5, loc='lower left')
+    ax[1].legend(fontsize=6.5, loc='upper left', bbox_to_anchor=(1.02, 1.0))
     guarda(fig, 'espiral')
 
 
@@ -234,8 +235,9 @@ def equilibrio():
         y = np.abs(dp['dphi'][:, m]).max(1)
         ax[0].semilogy(dp['t'][1:], y[1:], color=col, label=lab)
         print(f'  {d}: max_t max_r |dPhi| = {y.max():.2e}')
-    ax[0].set(xlabel='$t$', ylabel=r'$\max_r|\Phi(r,t)-\Phi(r,0)|$', title=r'(a) el potencial, $1\leq r\leq15$')
-    ax[0].legend()
+    ax[0].set(xlabel='$t$', ylabel=r'$\max_r|\Phi(r,t)-\Phi(r,0)|$', title=r'(a) el potencial, $1\leq r\leq15$',
+              ylim=(1e-9, 3e-3))
+    ax[0].legend(loc='lower right')
     import h5py
     from aa_numerico_L import phi_iso
     eq = np.load(os.path.join(E, 'ic_e0_equilibrio.npz'))
@@ -247,16 +249,20 @@ def equilibrio():
     print(f'  t=0: max|Phi_codigo - Phi_python| (1<r<15) = {np.abs(pot0-py)[m].max():.2e}; max|Phi_self| = {np.abs(eq["phi_self"]).max():.2e}')
     for d, col in (('eq_e0', 'k'), ('eq_e01', AZUL)):
         tc, zc = complejo(os.path.join(E, d, 'hk1_complex.tl'))
-        a = np.loadtxt(os.path.join(E, d, 'hk1_numerico.tl'))
+        a = np.loadtxt(os.path.join(E, d, 'hk1_numerico_eq.tl'))
         tn, zn = a[:, 0], a[:, 1::2] + 1j*a[:, 2::2]
+        ai = np.loadtxt(os.path.join(E, d, 'hk1_numerico.tl'))
+        zi = ai[:, 1::2] + 1j*ai[:, 2::2]
+        print(f'  {d}: marco instantáneo |h1|/h0 t=0,50,100: ' +
+              ' '.join(f'{abs(zi[i,1])/abs(zi[i,0]):.3e}' for i in (0, len(zi)//2, len(zi)-1)))
         ax[1].semilogy(tc, np.abs(zc[:, 1])/np.abs(zc[:, 0]), color=col, ls='--', lw=0.9)
         ax[1].semilogy(tn, np.abs(zn[:, 1])/np.abs(zn[:, 0]), 'o-', ms=2.5, color=col, lw=0.9)
         idx = [np.argmin(abs(tc - x)) for x in tn]
         print(f'  {d}: |h1|/h0 isócrono t=0,50,100: ' +
               ' '.join(f'{abs(zc[i,1])/abs(zc[i,0]):.3e}' for i in (idx[0], idx[len(idx)//2], idx[-1])) +
-              ' ; numérico: ' + ' '.join(f'{abs(zn[i,1])/abs(zn[i,0]):.3e}' for i in (0, len(tn)//2, len(tn)-1)))
+              ' ; numérico (marco del equilibrio): ' + ' '.join(f'{abs(zn[i,1])/abs(zn[i,0]):.3e}' for i in (0, len(tn)//2, len(tn)-1)))
     ax[1].plot([], [], 'k--', lw=0.9, label='mapa del isócrono (código)')
-    ax[1].plot([], [], 'ko-', ms=2.5, lw=0.9, label='mapa numérico')
+    ax[1].plot([], [], 'ko-', ms=2.5, lw=0.9, label='mapa numérico, potencial de equilibrio')
     ax[1].set(xlabel='$t$', ylabel=r'$|h_1|/h_0$', title='(b) $h_1$ con los dos mapas')
     ax[1].legend(fontsize=6.5)
     guarda(fig, 'equilibrio')
@@ -280,7 +286,35 @@ def fondos():
         print(f'  {d}: t hasta {E[-1,0]:g}, max|dE/E| = {np.max(np.abs(E[:,3]/E[0,3]-1)):.2e}')
 
 
-FIGURAS = [frecuencias, envolvente, verificacion, espiral, equilibrio, fondos]
+def mezcla():
+    """Solución exacta F(Q,J,L,t) = F0(Q - omega(J,L) t, J, L) para la gaussiana, en dos cortes."""
+    print('mezcla')
+    Q = np.linspace(0, 2*np.pi, 400)
+    J = np.linspace(0.0, 0.35, 300)
+    L = np.linspace(1.6, 2.4, 300)
+    tiempos = (0, 400, 2000)
+    fig, ax = plt.subplots(2, 3, figsize=(10, 5.2), sharex=True)
+    for j, t in enumerate(tiempos):
+        QQ, JJ = np.meshgrid(Q, J)
+        w = (JJ + c_de(2.0))**-3
+        F = np.exp(-np.sin(0.5*(QQ - w*t))**2/0.1**2)*np.exp(-JJ**2/0.1**2)*JJ**2
+        ax[0, j].pcolormesh(Q, J, F, shading='auto', cmap='Blues', rasterized=True)
+        ax[0, j].set(title=f'$t={t}$')
+        QQ, LL = np.meshgrid(Q, L)
+        w = (0.1 + c_de(LL))**-3
+        F = np.exp(-np.sin(0.5*(QQ - w*t))**2/0.1**2)*np.exp(-(LL - 2)**2/0.2**2)
+        ax[1, j].pcolormesh(Q, L, F, shading='auto', cmap='Oranges', rasterized=True)
+        ax[1, j].set(xlabel='$Q$')
+    ax[0, 0].set(ylabel='$J$  ($L=2$)')
+    ax[1, 0].set(ylabel='$L$  ($J=0.1$)')
+    guarda(fig, 'mezcla')
+    for t in (400, 2000):
+        dJ = 2*np.pi/(abs(-3*(0.1 + c_de(2.0))**-4)*t)
+        dL = 2*np.pi/(abs(-3*(0.1 + c_de(2.0))**-4*0.5*(1 + 2/np.sqrt(8)))*t)
+        print(f'  t={t}: separación de franjas k=1: dJ={dJ:.3f}, dL={dL:.3f}')
+
+
+FIGURAS = [frecuencias, mezcla, envolvente, verificacion, espiral, equilibrio, fondos]
 
 if __name__ == '__main__':
     filtro = sys.argv[1] if len(sys.argv) > 1 else ''
