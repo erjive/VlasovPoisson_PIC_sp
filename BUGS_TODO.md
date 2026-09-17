@@ -217,6 +217,18 @@ avanza.
   discreta exacta ≤2.9e-12 (3.5e-14 en k=0); yoshida4 (dt=0.025) frente
   a analytic 1.2e-11–2.6e-11, que es el error del integrador.
 
+- [x] **yoshida4 evaluaba 4 fuerzas por paso; la trayectoria usa 3**
+  (MEJORAS C2, paso 1). La fuerza tras el último drift solo la usan los
+  diagnósticos de cada `spatial_output` y `dt_switch=var`; ahora se
+  calcula solo entonces (igual en `analytic`). Perfil previo (128 mil
+  partículas `aa_quad`, 1000 pasos, 4 hilos): con autogravedad 92 s, de
+  ellos `avg_density` 54 s, interpolación a partículas 20 s, fondo 8 s,
+  centrífugo 4.6 s; sin autogravedad 15.6 s, fondo 7.2 s y centrífugo
+  4.2 s. Verificado idéntico bit a bit: t1/t2/t3, `dt_switch=var`,
+  leapfrog, analytic y todos los datos HDF5. ABBA (128 mil partículas):
+  con autogravedad 25.04 → 19.50 s (1.28×), 300 pasos; sin autogravedad
+  10.38 → 9.24 s (1.12×), 1000 pasos.
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo

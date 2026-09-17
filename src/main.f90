@@ -18,6 +18,7 @@ program VP_PIC
   implicit none
 
   integer i,j,k,l       ! Counters
+  logical :: sync       ! Does this step need the force at its final positions?
 
 ! Coefficients for the 4th-order symplectic integrator "yoshida4"
 ! (Yoshida, Phys. Lett. A 150, 262 (1990)): composes three
@@ -154,6 +155,14 @@ program VP_PIC
 
      t = t + dt
 
+!    yoshida4 and analytic never use the force at the end of a step to move
+!    the particles (the next step starts with a drift), only the potential
+!    and force of the diagnostics written every spatial_output steps, and
+!    set_timestep when dt_switch="var". Skipping that evaluation otherwise
+!    saves one of the four force evaluations per yoshida4 step.
+
+     sync = (mod(l,spatial_output) == 0) .or. (dt_switch == "var")
+
 !    Save old time step.
 
       r_part_p = r_part
@@ -184,12 +193,10 @@ program VP_PIC
 
 !   Fourth order symplectic integrator (Yoshida 1990), composed of
 !   three leapfrog-like drift-kick sub-steps -- see the coefficient
-!   definitions near the top of this program.  Costs 4 force
-!   evaluations per step (vs 1 for leapfrog: 3 for the sub-steps,
-!   plus one more after the final drift so that force_part stays
-!   synced with r_part on exit, matching what euler/leapfrog leave
-!   behind), but should tolerate a larger dt for the same
-!   energy-conservation accuracy.
+!   definitions near the top of this program.  Costs 3 force
+!   evaluations per step (vs 1 for leapfrog), plus one after the final
+!   drift on the steps whose diagnostics need it (see "sync" above), but
+!   tolerates a larger dt for the same energy-conservation accuracy.
 
     else if (integrator == 'yoshida4') then
 
@@ -206,14 +213,14 @@ program VP_PIC
       p_part = p_part + yg_d3*dt*force_part
 
       r_part = r_part + yg_c4*dt*p_part
-      call grav_force()
+      if (sync) call grav_force()
 
 !    Exact advance in angle-action variables (no self-gravity only).
 
      else if (integrator == 'analytic') then
 
        call advance_analytic(t)
-       call grav_force()
+       if (sync) call grav_force()
 
 !    Fourth order Runge-Kutta.
 
