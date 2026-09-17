@@ -26,7 +26,9 @@ subroutine grav_force
   use arrays
   use utils
   implicit none
+  integer :: i
   real(8) :: smallpi
+  real(8) :: sq,den      ! per-particle sqrt(1+r**2) and r**2+eps**2
   character(100) :: filename
   smallpi = acos(-1.0d0)
 
@@ -51,80 +53,102 @@ subroutine grav_force
 
   end if 
 
-  if (forcetype=="bg") then
+! Background, and the centrifugal term L**2/(2 r**2) of every particle.
+! The isochrone and the point mass, the backgrounds used in production, are
+! done in one parallel pass over the particles together with the centrifugal
+! term, with sqrt(1+r**2) and r**2+eps**2 formed once per particle. As whole
+! array expressions these were four serial passes and, once the force
+! evaluation dominated the run, a large part of its cost. The expressions
+! are the same, so the result is identical to the last bit.
 
-     if (BGtype == "null") then
+  if (BGtype == "Isochrone") then
 
-!       No background: only self-gravity, if any, and the centrifugal term.
-!       (The grid arrays it used to assign to themselves are not allocated
-!       without self-gravity.)
+     if (autointeraction) then
 
-     else if (BGtype == "sphere") then
+       !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(sq,den)
+       do i=1,Npart
+         sq  = sqrt(1.0D0+r_part(i)**2)
+         den = r_part(i)**2 + eps*eps
+         pot_part(i)   = pot_part(i) + (-1.0D0/(1.0D0+sq))
+         force_part(i) = force_part(i) + (-r_part(i)/(sq*(1.D0+sq)**2))
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+       end do
+       !$OMP END PARALLEL DO
 
-       call add_background
-
-     else if (BGtype == "Isochrone") then
-
-       if (autointeraction) then
-
-         pot_part =  pot_part + (-1.0D0/(1.0D0+sqrt(1.0D0+r_part**2)))
-         force_part = force_part + (-r_part/(sqrt(1.D0+r_part**2)*(1.D0+sqrt(1.D0+r_part**2))**2))
-
-         pot = pot + (-1.0D0/(1.0D0+sqrt(1.0D0+r**2)))
-         force = force + (-r/(sqrt(1.D0+r**2)*(1.D0+sqrt(1.D0+r**2))**2))
-
-       else
-
-         pot_part =  (-1.0D0/(1.0D0+sqrt(1.0D0+r_part**2)))
-         force_part = (-r_part/sqrt(1.D0+r_part**2)*pot_part**2)
-
-       end if
-
-     else if (BGtype == "Central") then
-
-       if (autointeraction) then
-
-         pot_part =  pot_part + (-1.0D0/r_part)
-         force_part = force_part + (-1.0D0/r_part**2)
-
-         pot = pot + (-1.0D0/r)
-         force = force + (-1.0D0/r**2)
-
-       else
-
-         pot_part =  (-1.0D0/r_part)
-         force_part = (-1.0D0/r_part**2)
-
-       end if
-
-     else if (BGtype == "iso" .or. BGtype == "isotrun" .or. &
-              BGtype == "nfw" .or. BGtype == "burkert") then
-
-       call add_background
+       pot = pot + (-1.0D0/(1.0D0+sqrt(1.0D0+r**2)))
+       force = force + (-r/(sqrt(1.D0+r**2)*(1.D0+sqrt(1.D0+r**2))**2))
 
      else
 
+       !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(sq,den)
+       do i=1,Npart
+         sq  = sqrt(1.D0+r_part(i)**2)
+         den = r_part(i)**2 + eps*eps
+         pot_part(i)   = (-1.0D0/(1.0D0+sq))
+         force_part(i) = (-r_part(i)/sq*pot_part(i)**2)
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+       end do
+       !$OMP END PARALLEL DO
+
+     end if
+
+  else if (BGtype == "Central") then
+
+     if (autointeraction) then
+
+       !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(den)
+       do i=1,Npart
+         den = r_part(i)**2 + eps*eps
+         pot_part(i)   = pot_part(i) + (-1.0D0/r_part(i))
+         force_part(i) = force_part(i) + (-1.0D0/r_part(i)**2)
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+       end do
+       !$OMP END PARALLEL DO
+
+       pot = pot + (-1.0D0/r)
+       force = force + (-1.0D0/r**2)
+
+     else
+
+       !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(den)
+       do i=1,Npart
+         den = r_part(i)**2 + eps*eps
+         pot_part(i)   = (-1.0D0/r_part(i))
+         force_part(i) = (-1.0D0/r_part(i)**2)
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+       end do
+       !$OMP END PARALLEL DO
+
+     end if
+
+  else
+
+     if (BGtype == "sphere" .or. BGtype == "iso" .or. BGtype == "isotrun" .or. &
+         BGtype == "nfw" .or. BGtype == "burkert") then
+       call add_background
+     else if (BGtype /= "null") then
+!      "null": no background, only self-gravity, if any, and the centrifugal term.
        print *
        print *, 'Unknown type of gravitational force'
        print *, 'Aborting ...'
        print *
        stop 1
+     end if
 
-     end if 
-
-
+     !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(den)
+     do i=1,Npart
+       den = r_part(i)**2 + eps*eps
+       pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
+       force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+     end do
+     !$OMP END PARALLEL DO
 
   end if
-  
 
-! *******************************
-! ***   ADD ANGULAR MOMENTUM  ***
-! *******************************
-
-  pot_part   = pot_part + 0.5d0*l_part**2/(r_part**2 + eps*eps)
-  force_part = force_part + l_part**2*r_part/(r_part**2 + eps*eps)**2
-        
-       
         !pot   = pot + 0.5d0*Lfix**2/(r**2 + eps*eps)
         !force = force + Lfix**2*r/(r**2 + eps*eps)**2
 

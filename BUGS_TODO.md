@@ -229,6 +229,15 @@ avanza.
   con autogravedad 25.04 → 19.50 s (1.28×), 300 pasos; sin autogravedad
   10.38 → 9.24 s (1.12×), 1000 pasos.
 
+- [x] **Fondo y término centrífugo en pasadas seriales** (MEJORAS C2,
+  paso 2). Para `Isochrone` y `Central` (y el centrífugo de los demás
+  fondos) ahora es una sola pasada paralela por partícula, con
+  sqrt(1+r²) y r²+eps² formados una vez y las mismas expresiones.
+  Verificado idéntico bit a bit en t1/t2/t3 y en 14 casos más
+  (Isochrone, Central, sphere, null, iso y nfw, con y sin autogravedad;
+  leapfrog; analytic). ABBA (128 mil partículas): con autogravedad
+  19.19 → 17.90 s, sin autogravedad 8.51 → 5.67 s (1.50×).
+
 ## Pendientes
 
 - [ ] **`grav_force.f90`: condición `r_part(i)<1.d0` en el fondo
