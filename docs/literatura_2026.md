@@ -176,8 +176,15 @@ Cada uno indica el montaje, lo que falta implementar y el costo con la máquina 
 
 ## 4. Lo que el código no puede hoy
 
-- **Solo ℓ=0**: sin perturbaciones no esféricas no hay ROI, ni modos ℓ=1 como los de
-  Fouvry y Prunet, ni espirales de fase tipo Gaia.
+- **La perturbación es solo ℓ=0**, que es independiente de tener distribución en L.
+  Cada partícula lleva su propio L y es una cáscara esféricamente simétrica de masa
+  8 π² f L dL dr dp: las órbitas son rosetas y σ_L fija la anisotropía del equilibrio,
+  pero la densidad y el campo que ve Poisson (dΦ/dr = M/r² en una malla radial) solo
+  tienen monopolo. En consecuencia la perturbación depende únicamente del ángulo radial
+  y la condición de resonancia es n Ω_r = ω con n_ψ = 0 — pero Ω_r = Ω_r(J,L), así que
+  la dispersión en L ensancha la banda de resonancia. Ese es el mecanismo que se mide
+  aquí. Lo que queda fuera son las perturbaciones no esféricas: la ROI (ℓ=2), los modos
+  ℓ=1 de Fouvry y Prunet y las espirales de fase tipo Gaia.
 - **Un solo fondo en producción** (isócrono); los demás fondos están implementados y
   verificados, pero los diagnósticos ángulo–acción suponen el isócrono.
 - **El mapa verdadero solo en postproceso** (`tools/hk_numerico.py`).
