@@ -53,3 +53,17 @@ Muestra la misma distribución en $(r,p_r,L)$, $(Q,J,L)$ y $(x,y,z)$ hasta t=240
 6 estrellas en planos orbitales aleatorios; su ángulo en el plano se obtiene de
 dψ/dt = L/r² (validado contra integración directa a 3e-5 rad).
 
+La versión con autogravedad (a0=1e-2, yoshida4 con dt=0.025) es:
+
+```bash
+cd exe && ./VP_PIC ../reproducir/video/df_gauss_sg.par && cd ..   # 25 min
+python3 reproducir/video/video_df_sg.py --valida                  # error de ψ frente al caso exacto
+python3 reproducir/video/video_df_sg.py --aa --procesos 2         # (Q,J) del potencial real, 601 instantáneas
+python3 reproducir/video/video_df_sg.py --procesos 2              # exe/rep/video/df_gauss_sg_3d.mp4
+```
+
+Aquí $(Q,J)$ sale del mapa ángulo-acción numérico en el potencial de cada instante (con
+el del isócrono aparecería el artefacto de coordenadas de las notas) y ψ se integra entre
+instantáneas con Hermite cúbico de r(t) y Gauss-Legendre de 8 nodos: el método, probado en
+la corrida sin autogravedad donde ψ se conoce exacto, acumula 1.2e-2 rad en 24 órbitas.
+Con `--procesos 2` el render usa poca memoria y deja la máquina utilizable.
