@@ -50,9 +50,21 @@ H = ½ + ½ sgn: la parte sgn se cancela igual que antes, pero la parte ½ sobre
 porque los pesos suman uno. Eso explica que el valor medido no dependa ni del orden del
 B-spline ni de la posición dentro de la celda.
 
-**Corrección.** Con el solver del punto 2 la autofuerza deja de valer exactamente
-−m/(2r²): vale ese valor por (1 − 0.78 dr/r), así que una resta analítica dejaría un 4 %
-de residuo a r = 20dr. Se resta **exacta**: la densidad propia de la partícula se
+**Por qué no basta restar la forma cerrada.** Conviene recordar primero que la autofuerza
+no aproxima nada: en Vlasov vale cero exactamente, y −m/(2r²) es la autogravedad de una
+cáscara de masa finita, o sea el mismo artefacto idealizado. Lo que sí debe converger al
+orden del esquema es el campo de una densidad suave, y converge (ver el punto 2).
+
+La autofuerza discreta se aparta de −m/(2r²) en **primer orden** en dr/r, porque es una
+integral sobre el ancho propio de la partícula, y a lo largo de ese ancho varían en
+O(dr/r) tanto la medida 4πr²dr (la mitad exterior del soporte pesa más) como el 1/r² con
+que se interpola de vuelta. Las dos reducen |F_auto|. Medido con la partícula en r=1 y
+misma fase en la celda, el cociente (1 − F/F_ref)/(dr/r) para dr = 0.2, 0.1, 0.05, 0.025,
+0.0125 da 0.709, 0.765, 0.798, 0.815, 0.824 con n=1, es decir tiende a 5/6 ≈ 0.833 (para
+n=3 tiende a ≈ 8/9). El coeficiente depende además de la fase dentro de la celda.
+
+Restar la forma cerrada dejaría entonces un residuo de (5/6)(dr/r) veces el artefacto
+— con dr=0.05 y r≈1, un 4 % — que sigue escalando como 1/N. Se resta **exacta**: la densidad propia de la partícula se
 construye sobre los puntos de su soporte con los pesos del depósito, su masa encerrada
 con los mismos `mcoefA`/`mcoefB` que usa el solver, y el resultado se interpola de vuelta
 con el mismo W_n. La imagen en −r_j pertenece a la misma partícula y entra también.
