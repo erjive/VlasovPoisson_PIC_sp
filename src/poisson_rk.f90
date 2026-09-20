@@ -42,6 +42,15 @@
   integer :: Wgrid,jc,m
   real(8) :: w,rj,pj,fj,rm,sgn
 
+! Removal of the self-force: the particle's own density on the few grid
+! points of its support, its own enclosed mass there, and the field it
+! interpolates back onto itself.
+
+  integer :: mlo,mhi,k
+  real(8) :: facrho,wd,wi,rprev,Mprev,Pprev,fself,pself,shift
+  real(8) :: rhoself(0:8),Mself(0:8),Phiself(0:8)
+  logical :: images
+
 ! *******************
 ! ***   NUMBERS   ***
 ! *******************
@@ -101,7 +110,11 @@
 ! dev_pot carries M while the integration runs, and is divided by r**2 at the
 ! end. It is a local role: outside this loop dev_pot is always dPhi/dr.
 
-  dev_pot(1) = 4.d0/3.d0*pi*rho0*r(1)**3
+! The mass is advanced with the weights mcoefA, mcoefB built in
+! construct_grid, so that the same weights can give each particle its own
+! contribution to M below, to the last bit.
+
+  dev_pot(1) = mcoefB(1)*rho0
   pot(1)     = 2.d0/3.d0*pi*rho0*r(1)**2
 
   do i=2,Nr
@@ -115,7 +128,7 @@
      c4 = pi*slope
      c0 = dev_pot(i-1) - c3*ra**3 - c4*ra**4
 
-     dev_pot(i) = c0 + c3*rb**3 + c4*rb**4
+     dev_pot(i) = dev_pot(i-1) + mcoefA(i)*avg_rho(i-1) + mcoefB(i)*avg_rho(i)
 
      pot(i) = pot(i-1) + (- c0/rb + c3*rb**2/2.d0 + c4*rb**3/3.d0) &
                        - (- c0/ra + c3*ra**2/2.d0 + c4*ra**3/3.d0)
@@ -176,7 +189,14 @@
   Wgrid = (bsplineorder+2)/2
   cutoff_interp = 0.5d0*dble(bsplineorder+1)*dr
 
-  !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(j,jc,rj,w,pj,fj,m,rm,sgn)
+! Mass of a particle is 4 pi facrho f L, as in the deposit (density.f90).
+
+  facrho = 2.0d0*pi*drc*dpc*dlc
+  images = (ghost > 0)
+
+  !$OMP PARALLEL DO SCHEDULE(GUIDED) &
+  !$OMP PRIVATE(j,jc,rj,w,pj,fj,m,rm,sgn,mlo,mhi,k,wd,wi,rprev,Mprev,Pprev) &
+  !$OMP PRIVATE(fself,pself,shift,rhoself,Mself,Phiself,ra,rb,slope,c0,c3,c4)
 
   do i=1,Npart
 
@@ -212,6 +232,111 @@
       force_part(i) = force_part(i) + fj*w
 
     end do
+
+!   Take out the force the particle exerts on itself. In a Cartesian mesh
+!   this cancels on its own: the field of a symmetric deposit is odd about
+!   its centre, so the quadratic form with the same weights vanishes. In
+!   spherical symmetry the kernel is one-sided instead (a shell pulls only
+!   what lies outside it), its symmetric part survives, and the particle
+!   feels its own -m/(2 r**2) -- the classical self-gravity of a shell,
+!   which is an artefact of giving a sampling element a finite mass and
+!   which no refinement of the mesh removes (AUDITORIA_2026-09-20.md,
+!   point 1).
+!
+!   It is removed exactly, not by the closed form: the particle's own
+!   density is built on the grid points of its support with the weights of
+!   the deposit, its own enclosed mass with the weights of the quadrature
+!   above, and the result is interpolated back with the same W_n. The image
+!   at -r_j belongs to the same particle, so it enters here too.
+
+    mlo = max(1,jc-Wgrid-1)
+    mhi = min(Nr,jc+Wgrid+1)
+
+    fself = 0.0d0
+    pself = 0.0d0
+
+    if (mhi >= mlo) then
+
+      do m=mlo,mhi
+        wd = 0.0d0
+        wi = 0.0d0
+        if (abs(r(m)-r_part(i)) < cutoff_interp) wd = Wn(bsplineorder,(r(m)-r_part(i))/dr)
+        if (images .and. abs(r(m)+r_part(i)) < cutoff_interp) wi = Wn(bsplineorder,(r(m)+r_part(i))/dr)
+        rhoself(m-mlo) = facrho*f(i)*l_part(i)*(wd+wi) &
+                       / (r(m)**2*dr + dr**3*dble(bsplineorder+1)/12.0d0)
+      end do
+
+      Mprev = 0.0d0
+      Pprev = 0.0d0
+
+      do m=mlo,mhi
+        k = m - mlo
+        rprev = 0.0d0
+        if (m > mlo) rprev = rhoself(k-1)
+        if (m == 1) then
+          Mself(k)   = mcoefB(1)*rhoself(k)
+          Phiself(k) = 2.d0/3.d0*pi*rhoself(k)*r(1)**2
+        else
+          Mself(k) = Mprev + mcoefA(m)*rprev + mcoefB(m)*rhoself(k)
+          ra = r(m-1)
+          rb = r(m)
+          slope = (rhoself(k) - rprev)/dr
+          c3 = 4.d0*pi*(rprev - slope*ra)/3.d0
+          c4 = pi*slope
+          c0 = Mprev - c3*ra**3 - c4*ra**4
+          Phiself(k) = Pprev + (- c0/rb + c3*rb**2/2.d0 + c4*rb**3/3.d0) &
+                             - (- c0/ra + c3*ra**2/2.d0 + c4*ra**3/3.d0)
+        end if
+        Mprev = Mself(k)
+        Pprev = Phiself(k)
+      end do
+
+!     Put the self potential on the same footing as the field it is taken
+!     out of: Phi -> -M/r beyond the support, the condition the whole
+!     solution is shifted to above.
+
+      shift = Pprev + Mprev/r(mhi)
+      do m=mlo,mhi
+        Phiself(m-mlo) = Phiself(m-mlo) - shift
+      end do
+
+      do j=jc-Wgrid,jc+Wgrid
+
+        rj = r(1) + dble(j-1)*dr
+        if (abs(r_part(i)-rj) >= cutoff_interp) cycle
+
+        if (j <= 0) then
+          m = 1-j
+          sgn = -1.0d0
+        else
+          m = j
+          sgn = 1.0d0
+        end if
+        if (m > Nr) then
+          rm = r(1) + dble(m-1)*dr
+          fj = sgn*(- Mprev/rm**2)
+          pj = Phiself(mhi-mlo)*r(mhi)/rm
+        else
+          fj = sgn*(- Mself(m-mlo)/r(m)**2)
+          pj = Phiself(m-mlo)
+        end if
+
+        w = Wn(bsplineorder,(r_part(i)-rj)/dr)
+
+        fself = fself + fj*w
+        pself = pself + pj*w
+
+      end do
+
+    end if
+
+!   Without the self-force the dynamics no longer produces the variation of
+!   the self-energy, so the same term has to leave the potential the energy
+!   is built from: what is left is the sum over pairs with j /= k.
+
+    force_part(i) = force_part(i) - fself
+    pot_part(i)   = pot_part(i)   - pself
+
   end do
   !$OMP END PARALLEL DO
 

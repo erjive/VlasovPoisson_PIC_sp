@@ -11,8 +11,8 @@ Estado de cada punto: PENDIENTE / EN CURSO / CORREGIDO (con el commit).
 
 ## SEVERIDAD ALTA
 
-### 1. El esquema tiene autofuerza, y el código afirma lo contrario
-**Estado: PENDIENTE**
+### 1. El esquema tenía autofuerza, y el código afirmaba lo contrario
+**Estado: CORREGIDO** (2026-09-20)
 
 `functions.f90:7` y la cabecera de `density.f90` afirman que usar el mismo `W_n` para
 depositar e interpolar evita la autofuerza. *Medido*: una cáscara aislada de masa 1
@@ -37,6 +37,55 @@ está aplicada ni mencionada.
 Magnitud en `eq_e01.par` (a0=0.01, Npart=32000): ~2e−5 de la fuerza de autogravedad.
 No explica la meseta ya medida, pero contamina los estudios de convergencia en N,
 porque introduce un término 1/N sistemático donde se busca ruido de muestreo.
+
+**Por qué aparece.** Con w_i los pesos del depósito y K(i',i) la fuerza en el punto i'
+por masa unidad en i, la autofuerza es la forma cuadrática m_j Σ w_i' K(i',i) w_i. En
+malla cartesiana K ∝ −sgn(i'−i) es antisimétrica y la forma cuadrática se anula: ese es
+el teorema que justifica usar el mismo W para depositar e interpolar. En simetría
+esférica el teorema de las capas da K(i',i) = −H(i'−i)/r_i'² con H el escalón, y
+H = ½ + ½ sgn: la parte sgn se cancela igual que antes, pero la parte ½ sobrevive y deja
+
+    F_auto = −(m_j/r_j²)·½·(Σ w_i)² = −m_j/(2 r_j²)
+
+porque los pesos suman uno. Eso explica que el valor medido no dependa ni del orden del
+B-spline ni de la posición dentro de la celda.
+
+**Corrección.** Con el solver del punto 2 la autofuerza deja de valer exactamente
+−m/(2r²): vale ese valor por (1 − 0.78 dr/r), así que una resta analítica dejaría un 4 %
+de residuo a r = 20dr. Se resta **exacta**: la densidad propia de la partícula se
+construye sobre los puntos de su soporte con los pesos del depósito, su masa encerrada
+con los mismos `mcoefA`/`mcoefB` que usa el solver, y el resultado se interpola de vuelta
+con el mismo W_n. La imagen en −r_j pertenece a la misma partícula y entra también.
+
+El autopotencial se resta igual, porque si no la energía deja de corresponder a la
+dinámica: lo que queda es la suma sobre pares con j ≠ k.
+
+Prueba de aceptación en el binario — una partícula con L=1, r₀=1, p₀=0, sin fondo, con
+autogravedad, cuya solución exacta es r(t) = √(1+t²). A t = 10, r exacto = 10.04987562112:
+
+| | r(10) | error relativo |
+|---|---|---|
+| con autofuerza | 10.010672361 | 3.9e−3 |
+| sin autofuerza | 10.049875621 | **8e−12** |
+
+Efecto sobre `10_energia/aa_sg.par`:
+
+| | max\|ΔE/E₀\| | \|h₁\| final |
+|---|---|---|
+| RK2 original | 1.9371e−07 | 8.43542392e−08 |
+| + punto 2 | 2.4851e−07 | 8.43542124e−08 |
+| + punto 1, solo la fuerza | 1.0535e−05 | 8.43527526e−08 |
+| + punto 1, fuerza y potencial | **2.0773e−07** | 8.43527526e−08 |
+
+La fila tercera es el diagnóstico de que la resta del potencial hace falta: quitar la
+fuerza sin quitar la autoenergía empeora la conservación 40 veces. Con las dos, la
+conservación queda mejor que en el código original, y eso explica de paso el
+empeoramiento que se había anotado en el punto 2: parte de él era la misma
+inconsistencia, en menor grado.
+
+|h₁| cambia 1.8e−5 en esa corrida. El costo añadido no se distingue de la variación entre
+corridas. La salida sigue siendo idéntica bit a bit entre corridas con el mismo número
+de hilos.
 
 ### 2. Poisson perdía la masa de las partículas cercanas al origen
 **Estado: CORREGIDO** (2026-09-20)

@@ -89,9 +89,13 @@ module utils
     allocate(force  (1-ghost:Nr))
     allocate(pot    (1-ghost:Nr))
     allocate(dev_pot(1-ghost:Nr))
+    allocate(mcoefA(1:Nr))
+    allocate(mcoefB(1:Nr))
     force   = 0.0d0
     pot     = 0.0d0
     dev_pot = 0.0d0
+    mcoefA  = 0.0d0
+    mcoefB  = 0.0d0
   end if
 
 
@@ -144,6 +148,8 @@ module utils
     deallocate(force)
     deallocate(pot)
     deallocate(dev_pot)
+    deallocate(mcoefA)
+    deallocate(mcoefB)
   end if
 
 ! Density function f
@@ -169,10 +175,34 @@ subroutine construct_grid
 ! the symmetry f(r,p) = f(-r,-p).
 
   integer i
+  real(8) I0,I1
 
   do i=1-ghost,Nr
     r(i) = rmin + (dble(i)-0.5d0)*dr
   end do
+
+! Weights of the mass quadrature used by poisson_rk. On [r(i-1),r(i)] the
+! density is the straight line through rho(i-1) and rho(i), so
+!
+!   Int_{r(i-1)}^{r(i)} 4 pi r**2 rho dr = mcoefA(i) rho(i-1) + mcoefB(i) rho(i)
+!
+! with I0 = Int r**2 dr and I1 = Int r**2 (r-r(i-1)) dr over the interval.
+! The first point covers [0,r(1)], where the density is even and therefore
+! constant, so it takes the whole cell and mcoefA(1) is never used.
+
+  if (autointeraction) then
+
+    mcoefA(1) = 0.0d0
+    mcoefB(1) = 4.0d0/3.0d0*acos(-1.0d0)*r(1)**3
+
+    do i=2,Nr
+      I0 = (r(i)**3 - r(i-1)**3)/3.0d0
+      I1 = (r(i)**4 - r(i-1)**4)/4.0d0 - r(i-1)*I0
+      mcoefA(i) = 4.0d0*acos(-1.0d0)*(I0 - I1/dr)
+      mcoefB(i) = 4.0d0*acos(-1.0d0)*I1/dr
+    end do
+
+  end if
 
 end subroutine construct_grid
 

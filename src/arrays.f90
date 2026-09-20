@@ -14,6 +14,13 @@
   real(8), allocatable, dimension(:) :: pot      ! Self-gravity (plus background) potential on the grid.
   real(8), allocatable, dimension(:) :: dev_pot  ! dPhi_self/dr on the grid.
 
+! Weights of the mass quadrature of poisson_rk: the enclosed mass advances as
+! M(r_i) = M(r_(i-1)) + mcoefA(i) rho(i-1) + mcoefB(i) rho(i), and the same
+! weights give each particle its own contribution to M (the self-force).
+
+  real(8), allocatable, dimension(:) :: mcoefA
+  real(8), allocatable, dimension(:) :: mcoefB
+
   real(8), allocatable, dimension(:) :: rho      ! Mass density on the grid (output).
   real(8), allocatable, dimension(:) :: avg_rho  ! Mass density on the grid used by Poisson.
   real(8), allocatable, dimension(:) :: curr     ! Radial mass current on the grid (output).
