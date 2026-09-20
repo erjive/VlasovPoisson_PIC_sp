@@ -36,8 +36,7 @@
 
   integer i,j
 
-  real(8) spot,sdev_pot
-  real(8) poth,dev_poth
+  real(8) ra,rb,slope,c0,c3,c4
   real(8) rho0,pi
   real(8) cutoff_interp
   integer :: Wgrid,jc,m
@@ -59,56 +58,73 @@
   pot = 0.0d0
   dev_pot = 0.0d0
 
-! Solve equation using second order Runge-Kutta.
+! The equation is integrated in the enclosed mass rather than in dPhi/dr,
+!
+!   dM/dr = 4 pi r**2 rho,      dPhi/dr = M/r**2,
+!
+! which removes the 2/r term and with it the only source of stiffness at the
+! origin. Between two grid points the density is the straight line through
+! its two values,
+!
+!   rho(x) = rho(i-1) + slope (x - ra),   slope = (rho(i)-rho(i-1))/dr,
+!
+! so M is a quartic in x with no linear or quadratic term,
+!
+!   M(x) = c0 + c3 x**3 + c4 x**4,   c3 = 4 pi (rho(i-1) - slope ra)/3,
+!                                    c4 = pi slope,
+!
+! and both integrals are done in closed form, with no quadrature error:
+!
+!   Int M/x**2 dx = -c0/x + c3 x**2/2 + c4 x**3/3.
+!
+! For the linear weight (bsplineorder = 1) the straight line between grid
+! points reproduces the deposited profile exactly, so every particle
+! contributes its whole mass to the field whatever its radius, including the
+! first cell. The Runge-Kutta this file is named after integrated dPhi/dr
+! directly and lost that mass near the origin: a particle sitting on r(1)
+! produced no field at all (see AUDITORIA_2026-09-20.md, point 2).
 
 ! First calculate the density
   call avg_density
 
-
-! Note 1: The first point must be treated differently
-! since we have a division by zero at the origin.
-! If we take  dev_pot~a*r  for r<<1, with "a" constant,
-! one can show that a=(4/3)*pi*rho(r=0)
-! (but notice that this is only second order).
-
-! Note 2: Remember that in order to apply correctly
-! the boundaty conditions, we have two ghost points
-! to the left of the origin, so the first point with
-! positive r is i=1.
-
-! First point with positive r (i=1).
+! Between the origin and r(1) the density is even, so the ghost point carries
+! the same value as r(1) and rho is constant there:
+!
+!   M(r1) = (4/3) pi rho(1) r1**3,   Phi(r1) - Phi(0) = (2/3) pi rho(1) r1**2.
+!
+! Phi(0) = 0 is arbitrary; the additive constant is fixed at the end. Note 2
+! of the original code still holds: with rmin = 0 there are two ghost points
+! to the left of the origin and the first point with positive r is i=1.
 
   rho0 = avg_rho(1)
 
-  pot(1) = 2.d0/3.d0*pi*rho0*r(1)**2
-  dev_pot(1) = 4.d0/3.d0*pi*rho0*r(1)
+! dev_pot carries M while the integration runs, and is divided by r**2 at the
+! end. It is a local role: outside this loop dev_pot is always dPhi/dr.
 
-! All other points.
+  dev_pot(1) = 4.d0/3.d0*pi*rho0*r(1)**3
+  pot(1)     = 2.d0/3.d0*pi*rho0*r(1)**2
 
   do i=2,Nr
 
-!    Calculate sources at left point.
+     ra = r(i-1)
+     rb = r(i)
 
-     spot = dev_pot(i-1)
-     sdev_pot = - 2.d0*dev_pot(i-1)/r(i-1) + 4.d0*pi*avg_rho(i-1)
+     slope = (avg_rho(i) - avg_rho(i-1))/dr
 
-!    Advance half a step.
+     c3 = 4.d0*pi*(avg_rho(i-1) - slope*ra)/3.d0
+     c4 = pi*slope
+     c0 = dev_pot(i-1) - c3*ra**3 - c4*ra**4
 
-     poth = pot(i-1) + 0.5d0*dr*spot
-     dev_poth = dev_pot(i-1) + 0.5d0*dr*sdev_pot
+     dev_pot(i) = c0 + c3*rb**3 + c4*rb**4
 
-!    Calculate sources at intermediate point.
-
-     spot = dev_poth
-     sdev_pot = - 4.d0*dev_poth/(r(i-1) + r(i)) &
-          + 2.d0*pi*(avg_rho(i-1) + avg_rho(i))
-
-!    Advanced full step.
-
-     pot(i) = pot(i-1) + dr*spot
-     dev_pot(i) = dev_pot(i-1) + dr*sdev_pot
+     pot(i) = pot(i-1) + (- c0/rb + c3*rb**2/2.d0 + c4*rb**3/3.d0) &
+                       - (- c0/ra + c3*ra**2/2.d0 + c4*ra**3/3.d0)
 
   end do
+
+! From the enclosed mass to dPhi/dr.
+
+  dev_pot(1:Nr) = dev_pot(1:Nr)/r(1:Nr)**2
 
 ! Ghost points using symmetries.
 

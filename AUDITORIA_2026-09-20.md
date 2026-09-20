@@ -38,8 +38,8 @@ Magnitud en `eq_e01.par` (a0=0.01, Npart=32000): ~2e−5 de la fuerza de autogra
 No explica la meseta ya medida, pero contamina los estudios de convergencia en N,
 porque introduce un término 1/N sistemático donde se busca ruido de muestreo.
 
-### 2. Poisson pierde la masa de las partículas cercanas al origen
-**Estado: PENDIENTE**
+### 2. Poisson perdía la masa de las partículas cercanas al origen
+**Estado: CORREGIDO** (2026-09-20)
 
 *Medido*: masa que ve el campo, M = −F(Nr)·r(Nr)², para una partícula de masa 1.
 
@@ -61,6 +61,58 @@ Lejos del origen el error es O((dr/r)²), la convergencia de segundo orden esper
 problema se limita a r ≲ 5dr. No se dispara en producción porque L ∈ [1.6, 2.4] mantiene
 los pericentros en r ≳ 20dr, pero invalida cualquier corrida con autogravedad y órbitas
 de L pequeño o radiales.
+
+**Corrección.** `poisson_rk.f90` ahora integra la masa encerrada en lugar de dPhi/dr:
+
+    dM/dr = 4 pi r**2 rho,      dPhi/dr = M/r**2
+
+con rho reconstruida como la recta entre valores de malla, de modo que M es una cuártica
+y ambas integrales se hacen en forma cerrada sobre cada intervalo. Desaparece el término
+2/r y con él la rigidez en el origen. Para el peso lineal (bsplineorder = 1) la recta
+reproduce exactamente el perfil depositado, así que cada partícula aporta toda su masa
+sea cual sea su radio.
+
+Medido en el binario, no en la réplica (una partícula de masa 1, `dr` = 0.01):
+
+| n | r_j/dr | antes | después |
+|---|---|---|---|
+| 1 | 0.5 | −0.00000000 | **1.00000000** |
+| 1 | 1.0 | 0.58341142 | **1.00000000** |
+| 1 | 2.0 | 1.09610630 | **1.00000000** |
+| 1 | 20.0 | 1.00020220 | **1.00000000** |
+| 2 | 0.5 | 0.14099109 | 0.85000000 |
+| 2 | 20.0 | 0.99999356 | 0.99979141 |
+| 3 | 0.5 | 0.18192399 | 0.75115207 |
+| 3 | 20.0 | 0.99978488 | 0.99958264 |
+
+Para n ≥ 2 la reconstrucción lineal no reproduce el B-spline, así que queda un error
+O((dr/r)²) del mismo orden que antes, pero sin el fallo catastrófico cerca del origen.
+
+Esfera uniforme de masa 1 y radio 5 (2000 cáscaras, `dr` = 0.05), error relativo de la
+fuerza:
+
+| | antes | después |
+|---|---|---|
+| dentro (r < 4.95) | 5.0006e−4 | 5.0006e−4 |
+| fuera (r > 5.25) | 8.8595e−5 | **4.3144e−9** |
+| masa total vista | 0.9999937120 | **1.0000000003** |
+
+El error interno es idéntico porque lo domina el sesgo de muestreo de CIC (punto 11),
+no el solver.
+
+Efecto sobre la física, corrida `10_energia/aa_sg.par` (a0=1e−3, autogravedad, 4000 pasos):
+
+| | antes | después |
+|---|---|---|
+| E(0) | −7.846893890e−05 | −7.846891980e−05 |
+| max\|ΔE/E₀\| | 1.9371e−07 | 2.4851e−07 |
+| \|h₁\| final | 8.43542392e−08 | 8.43542124e−08 |
+
+Los resultados cambian ~3e−7 en esa corrida. La conservación de energía queda
+ligeramente peor (mismo orden); no se investigó el motivo, y conviene vigilarlo.
+
+Las corridas sin autogravedad no cambian en absoluto: `poisson_rk` solo se llama desde
+`grav_force` bajo `if (autointeraction)`.
 
 ### 3. `BGtype="null"` sin autogravedad acumula fuerza sin límite
 **Estado: PENDIENTE**
@@ -210,6 +262,15 @@ partículas archivadas en la celda del extremo. Vale para el término directo, n
 término imagen: una partícula en r < −W_cell·dr tiene su imagen sobre puntos que no
 escanean la celda 1 y su masa desaparecería. Con courant ≤ 0.5 nunca ocurre, pero nada
 lo verifica.
+
+### 19. `eps` es un parámetro de entrada que el código sobrescribe en silencio
+**Estado: PENDIENTE** (hallado al corregir el punto 2)
+
+`paramfile.f90` acepta `eps` del archivo de parámetros, y `utils.f90:36` lo fija a cero
+en `set_grid_size`, después de leerlo. Todo el código de suavizado del término centrífugo
+(`den = r**2 + eps*eps` en `grav_force.f90`) es código muerto, y la comprobación
+`eps /= 0` de `main.f90:54` no puede fallar nunca. Está documentado en la declaración
+(`parameters.f90:42`) pero un valor puesto en el `.par` se descarta sin aviso.
 
 ---
 
