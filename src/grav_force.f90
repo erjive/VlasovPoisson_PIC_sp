@@ -122,12 +122,19 @@ subroutine grav_force
          BGtype == "nfw" .or. BGtype == "burkert") then
        call add_background
      else if (BGtype /= "null") then
-!      "null": no background, only self-gravity, if any, and the centrifugal term.
        print *
        print *, 'Unknown type of gravitational force'
        print *, 'Aborting ...'
        print *
        stop 1
+     else if (.not. autointeraction) then
+!      "null": no background, only the centrifugal term (plus self-gravity, if
+!      any). With self-gravity poisson_rk has just set both arrays; without it
+!      nothing has, and the centrifugal term below would be added on top of the
+!      values left by the previous call, growing without bound
+!      (AUDITORIA_2026-09-20.md, point 3).
+       pot_part   = 0.0D0
+       force_part = 0.0D0
      end if
 
      !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(den)

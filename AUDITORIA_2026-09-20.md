@@ -163,8 +163,8 @@ ligeramente peor (mismo orden); no se investigó el motivo, y conviene vigilarlo
 Las corridas sin autogravedad no cambian en absoluto: `poisson_rk` solo se llama desde
 `grav_force` bajo `if (autointeraction)`.
 
-### 3. `BGtype="null"` sin autogravedad acumula fuerza sin límite
-**Estado: PENDIENTE**
+### 3. `BGtype="null"` sin autogravedad acumulaba fuerza sin límite
+**Estado: CORREGIDO** (2026-09-20)
 
 En `grav_force.f90:119-141`, con `BGtype="null"` y `autointeraction=.false.` no se
 ejecuta `add_background` ni ninguna otra asignación, y el bucle siguiente hace
@@ -172,6 +172,19 @@ ejecuta `add_background` ni ninguna otra asignación, y el bucle siguiente hace
 yoshida4 son 3 o 4 acumulaciones por paso. `null` es una opción aceptada
 (`paramfile.f90:387`) y corresponde a la prueba exacta más elemental del integrador:
 partículas libres con momento angular.
+
+**Corrección.** La rama añade el caso `null` sin autogravedad y pone ambos arreglos a
+cero antes de sumar el término centrífugo. Con autogravedad no hace falta, porque
+`poisson_rk` acaba de asignarlos.
+
+Prueba de aceptación: una partícula con L=1, r₀=1, p₀=0, `BGtype=null`,
+`autointeraction=.false.`, solución exacta r(t) = √(1+t²). A t = 10, r exacto =
+10.04987562112:
+
+| | r(10) |
+|---|---|
+| antes | 6972.33 |
+| después | **10.049875621** |
 
 ---
 
