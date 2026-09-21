@@ -31,7 +31,7 @@ Los puntos se escribieron leyendo el código; solo la medición decide.
 | 18 | lista de celdas y factor de Courant | pendiente |
 | 19 | `eps` | **enunciado erróneo**, severidad rebajada |
 | 20 | convenio del depósito | medido, decisión pendiente |
-| 21 | el equilibrio no lo es del sistema discreto | **nuevo**, hallado midiendo el ruido |
+| 21 | el equilibrio no lo es del sistema discreto | **confirmado**, medido por tres vías |
 
 
 ---
@@ -545,7 +545,7 @@ densidad insesgada. Para n = 1 no hace falta: la recta ya es el sombrero.
 artículo, que exigiría implementarlo en el código.
 
 ### 21. El equilibrio de `tools/equilibrio_L.py` no es un equilibrio del sistema discreto
-**Estado: NUEVO** (hallado al medir el piso de ruido)
+**Estado: CONFIRMADO** (2026-09-20)
 
 Al medir el ruido con un equilibrio autoconsistente y `eps = 0` — una configuración que
 no debería evolucionar — la señal |h₁(t)−h₁(0)| a t=100 resultó ser:
@@ -568,11 +568,45 @@ equilibrio que construye el generador no es equilibrio del sistema **discreto**:
 Φ_self, calculado con el mapa ángulo–acción en Python, difiere del que calcula la malla
 del código, y esa diferencia produce una evolución sistemática independiente de N.
 
-Consecuencias: (a) esa prueba **no mide el piso de discreción**, así que no se puede citar
-como tal; (b) cualquier corrida que entre por `state=checkpoint` con un equilibrio
-arrastra ese desajuste. Falta comprobarlo directamente — comparar el Φ_self del
-generador con el de la malla para la misma distribución — y, si se confirma, iterar el
-equilibrio contra el solver del código en vez de contra el de Python.
+**Confirmado por tres vías.**
+
+*Uno: el desajuste existe y se mide.* Comparando el Φ_self que el generador deja en
+`ic_*_equilibrio.npz` con el que calcula la malla del código para esa misma condición
+inicial (corrida con Nt=0, restando el isócrono del potencial de salida):
+
+| | |
+|---|---|
+| profundidad del pozo Φ_self | 1.597e−03 |
+| max\|Φ_código − Φ_generador\| | 1.439e−07 |
+| relativo a la profundidad | **9.0e−05** |
+
+*Dos: no es el integrador temporal.* Repitiendo la corrida con `courant` = 0.5, 0.25 y
+0.125 (es decir dt, dt/2 y dt/4, con Nt escalado para llegar al mismo t=100):
+
+| courant | \|h₁(fin)−h₁(0)\| |
+|---|---|
+| 0.5 | 2.118272622610e−11 |
+| 0.25 | 2.118269538849e−11 |
+| 0.125 | 2.118268579241e−11 |
+
+Coinciden a **seis cifras** y convergen al refinar: la señal es una evolución real del
+sistema discreto que el integrador resuelve bien, no un error suyo.
+
+*Tres: el tamaño cuadra.* δΦ = 1.44e−07 desplaza la acción en δJ ≈ δΦ/ω ≈ 2.9e−07, o sea
+δω/ω ≈ 3·δJ/(J+c) ≈ 3.5e−07. Sobre t=100 eso es un desfase δQ ≈ 1.4e−05 rad, y con
+|h₀| = 1.06e−06 da |h₁| ≈ 1.5e−11, del mismo orden que los 2.1e−11 medidos.
+
+**Consecuencias.** (a) Esa prueba **no mide el piso de discreción** y no se puede citar
+como tal; hace falta otro diseño para medirlo. (b) Toda corrida que entre por
+`state=checkpoint` con un equilibrio arrastra ese desajuste, que no mejora al subir N
+porque es un efecto de la malla, no del muestreo.
+
+**Arreglo propuesto.** Iterar el equilibrio contra el solver **del código** en vez del de
+Python. No hace falta llamar al binario: la réplica del esquema (depósito con V_i, la
+cuadratura de masa de §7.2 y la interpolación) reproduce al código a ocho cifras, así que
+basta con sustituir la Poisson continua de `tools/equilibrio_L.py` por esa. Mientras no se
+haga, conviene decir en las notas que los equilibrios son aproximados al nivel de 1e−4
+relativo.
 
 ---
 
