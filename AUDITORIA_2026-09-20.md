@@ -323,12 +323,17 @@ calcula con escalares dentro del lazo paralelo y los nueve arreglos desaparecen.
 salida es **idéntica bit a bit** (hk1.tl, hk1\_complex.tl, hk2.tl y la energía, corrida de
 equilibrio con 8000 partículas y 8000 pasos).
 
-El precio es tiempo: con 10⁵ partículas y 200 llamadas a `analysish`, el mejor de tres
-pasa de 4.74 s a 5.10 s, un 7 % más. Las expresiones sobre arreglos completos
-vectorizaban mejor que el lazo escalar con sus ramas. En producción `analysish` corre
-cada `spatial_output` pasos (40 en las corridas de referencia), así que ese 7 % es una
-fracción pequeña del total, y a cambio el programa ocupa un 41 % menos en el caso que
-importa para escalar N.
+Sobre el tiempo no hay diferencia resoluble. Con 10⁵ partículas y 200 llamadas a
+`analysish`, seis repeticiones de cada versión: con arreglos, mínimo 4.48 s y mediana
+4.71 s; sin ellos, mínimo 3.54 s y mediana 4.64 s. Las medianas coinciden dentro del
+ruido de la máquina.
+
+**Corrección de una medición anterior.** Había escrito aquí que el refactor costaba un
+7 % de tiempo. Esa medida estaba contaminada: un proceso huérfano mío, resto de un barrido
+abortado al principio de la sesión, llevaba diez horas consumiendo CPU. Con la máquina
+limpia el 7 % desaparece. Los resultados de h_k y las comparaciones bit a bit no se ven
+afectados, porque son deterministas; **las mediciones de tiempo de esta sesión tomadas
+antes de las 23:40 sí**, y conviene repetir cualquiera que importe.
 
 ### 7. `courant = 80.0` en un archivo de parámetros distribuido
 **Estado: PENDIENTE**
