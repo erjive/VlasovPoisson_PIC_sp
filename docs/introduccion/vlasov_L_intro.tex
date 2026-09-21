@@ -536,9 +536,10 @@ $F$ se representa con macropartículas $(r,p_r,L,f)$. En cada evaluación de fue
     ambas integrales en forma cerrada (\S\ref{sec:poisson}), y se ajusta la constante
     para que $\Phi+r\Phi'\to0$ en el borde;
   \item se interpolan potencial y fuerza a cada partícula con el mismo $W_n$, usando los
-    nodos espejo para $r<\Delta r$ y la solución kepleriana más allá del último nodo; se
-    resta la autofuerza, que en simetría esférica no se cancela sola
-    (\S\ref{sec:autofuerza}), y se suman el fondo y el término centrífugo $L^2/r^3$;
+    nodos espejo para $r<\Delta r$ y la solución kepleriana más allá del último nodo; el
+    campo incluye el de la propia partícula, que en simetría esférica no se anula y es la
+    autogravedad física de una capa (\S\ref{sec:autofuerza}), y se suman el fondo y el
+    término centrífugo $L^2/r^3$;
   \item se avanzan las partículas.
 \end{enumerate}
 Referencias clásicas: Birdsall y Langdon~\cite{birdsall2004}, Hockney y
@@ -550,8 +551,9 @@ uniforme (radio 5, 2000 capas) y partículas de prueba sin masa, la fuerza sobre
 partículas coincide con $-M(<r)/r^2$ a $6\times10^{-8}$ con $n=2,3$, desde $r=0.01$
 hasta fuera de la malla; ese número es la precisión con que las capas representan la
 esfera. Con una sola capa, la fuerza es nula adentro y $-M/r^2$ afuera; sobre la capa
-misma valía $-0.49\,M/R^2$, que no es un límite continuo que haya que reproducir sino la
-autofuerza que ahora se resta (\S\ref{sec:autofuerza}). Una revisión del código contra estas
+misma vale $-0.49\,M/R^2$, el promedio de los dos lados, $-M/2R^2$, salvo una corrección
+$O(\Delta r/R)$ de la malla. Es la autogravedad de la capa, y el esquema debe
+reproducirla (\S\ref{sec:autofuerza}). Una revisión del código contra estas
 ecuaciones encontró y corrigió que la interpolación ignoraba los nodos espejo (la fuerza
 salía entre 3.7 y 5 veces la exacta en $r=0.01$), que el volumen $V_i$ era el de otra
 función de peso (densidad uniforme sobrestimada en $1+\Delta r^2/12r^2$) y que las
@@ -639,7 +641,8 @@ con $c_0$ fijado por $M(r_{i-1})$, y las dos integrales se hacen en forma cerrad
   \int \frac{M(x)}{x^{2}}\,\dd x=-\frac{c_0}{x}+\frac{c_3}{2}x^{2}+\frac{c_4}{3}x^{3} .
 \end{equation}
 No hay error de cuadratura dentro del intervalo; la única aproximación es la
-reconstrucción lineal de $\rho$. Escrito como pesos, que es como está en el código,
+reconstrucción lineal de $\rho$. El código avanza $M(r_i)=c_0+c_3r_i^{3}+c_4r_i^{4}$, que
+escrito como pesos es
 \begin{equation}
   M(r_i)=M(r_{i-1})+A_i\,\rho_{i-1}+B_i\,\rho_i ,\qquad
   \begin{aligned}
@@ -805,7 +808,9 @@ falta, porque la recta ya \emph{es} el sombrero.
 \label{sec:autofuerza}
 
 El mismo cambio obligó a revisar una afirmación que el código heredaba de la literatura
-cartesiana: que usar el mismo $W_n$ para depositar e interpolar evita la autofuerza.
+cartesiana: que usar el mismo $W_n$ para depositar e interpolar evita la autofuerza. En
+simetría esférica no la evita, y decidir qué hacer con ella llevó dos intentos. Se deja
+aquí el razonamiento completo, incluido el equivocado.
 
 Sean $w_i$ los pesos del depósito de una partícula y $K(i',i)$ la fuerza en el nodo $i'$
 producida por masa unidad en el nodo $i$. La fuerza que la partícula se hace a sí misma
@@ -833,50 +838,102 @@ Es la autogravedad clásica de una capa. Medida en el esquema, no depende del or
 B-spline ni de la posición de la partícula dentro de la celda, tal como
 predice~\eqref{eq:autofuerza}.
 
-\paragraph{Es un artefacto.} En la ecuación de Vlasov la autofuerza es cero
-\emph{exactamente}: cada elemento de fluido tiene masa infinitesimal. El
-$-m_j/(2r_j^{2})$ aparece solo porque la discretización le da masa finita a un elemento
-de muestreo. Tres propiedades lo hacen incómodo: es sistemático y siempre hacia adentro,
-escala como $1/N$ a masa total fija y \emph{no mejora al refinar la malla}, y como
-$m_j\propto f_jL_j$ varía a lo largo del soporte, produce una dispersión espuria de
-frecuencias correlacionada con la posición en $(J,L)$ --- justo la cantidad que mide
-$h_k$.
+\paragraph{Es física, no un artefacto.} Una capa delgada de masa $m$ siente el promedio
+del campo a los dos lados de sí misma. Si tiene espesor $\delta$ y la masa encerrada
+$m(s)$ crece de $0$ a $m$ a través de ella, la fuerza media por unidad de masa es
+\begin{equation}
+  \langle F\rangle=-\frac{1}{m}\int_0^{m}\frac{m(s)}{s^{2}}\,\dd m(s)
+  \;\longrightarrow\;-\frac{m}{2r^{2}}\qquad(\delta\to0),
+\end{equation}
+exactamente~\eqref{eq:autofuerza}: una capa de polvo en reposo colapsa por su propio peso.
+Cada macropartícula de este código es una capa así, un elemento de cuadratura de una $F$
+suave, con la mitad de su masa por dentro de su radio. El campo de la malla evalúa el campo
+continuo de la densidad reconstruida, la propia incluida, y esa es la estimación
+consistente. En la malla cartesiana la autofuerza se anula porque el campo de una nube
+simétrica es cero en su centro; el mismo principio, en simetría esférica, da $-m/2r^{2}$
+y no cero.
 
-\paragraph{Por qué no basta restar la forma cerrada.} Con el integrador
-de~\eqref{eq:poisson_masa} la autofuerza discreta se aparta
-de~\eqref{eq:autofuerza} en \emph{primer} orden en $\Delta r/r$, porque es una integral
-sobre el ancho propio de la partícula, y a lo largo de ese ancho varían en
-$O(\Delta r/r)$ tanto la medida $4\pi r^{2}\dd r$ (la mitad exterior del soporte pesa
-más) como el $1/r^{2}$ con que se interpola de vuelta. Midiendo con la partícula en
-$r=1$ y la misma fase dentro de la celda, el cociente
-$\big(1-F/F_{\text{auto}}\big)/(\Delta r/r)$ vale $0.709$, $0.765$, $0.798$, $0.815$,
-$0.824$ para $\Delta r=0.2,\,0.1,\,0.05,\,0.025,\,0.0125$: tiende a $5/6$ con $n=1,2$, y
-a $\approx8/9$ con $n=3$. Restar la forma cerrada dejaría un residuo del $5/6\,(\Delta
-r/r)$ del artefacto --- un 4\,\% con $\Delta r=0.05$ y $r\approx1$ --- que sigue
-escalando como $1/N$.
+\paragraph{Lo que se hizo y se deshizo.} El 20 de septiembre de 2026 (commit
+\texttt{bfd9b29}) el código pasó a restar esta fuerza de manera exacta, con el argumento
+contrario: en la ecuación de Vlasov cada elemento tiene masa infinitesimal, así que
+$-m_j/2r_j^{2}$ aparecería solo porque la discretización le da masa finita a un elemento
+de muestreo; no mejora al refinar la malla, y como $m_j\propto f_jL_j$ varía en el
+soporte, dispersaría las frecuencias. La resta reconstruía la densidad propia de la
+partícula con los pesos del depósito, integraba su masa con los pesos $A_i,B_i$
+de~\eqref{eq:pesos_masa} y la interpolaba de vuelta con el mismo $W_n$, junto con el
+autopotencial. La premisa falla: el término sí desaparece cuando $N\to\infty$ (es $O(1/N)$
+a masa total fija), y restarlo no lo elimina, sino que lo cambia por un error del mismo
+tamaño y signo contrario, porque en el continuo la mitad de esa masa sí está dentro del
+radio de la partícula. La auditoría científica del 21 de septiembre
+(\texttt{AUDITORIA\_CIENTIFICA\_2026-09-21.md}, hallazgo D1) lo midió con un problema de
+solución exacta, y la resta se revirtió.
 
-\paragraph{Lo que hace el código.} Resta la autofuerza \emph{exacta}, sin ninguna
-constante ajustada: reconstruye la densidad propia de la partícula sobre los nodos de su
-soporte con los pesos del depósito, integra su masa encerrada con los mismos pesos
-$A_i,B_i$ de~\eqref{eq:pesos_masa} que usa el solver, y la interpola de vuelta con el
-mismo $W_n$. La imagen en $-r_j$ pertenece a la misma partícula y entra también. Si
-cambian $\Delta r$, el orden del B-spline o el solver, la corrección los sigue sola.
+\paragraph{La prueba que lo decide.} Una esfera uniforme fría de masa y radio unidad
+colapsa, mientras las capas no se cruzan, siguiendo la cicloide del continuo,
+$r=r_0\cos^{2}\theta$ con $t=(\theta+\sin\theta\cos\theta)/\sqrt2$. La
+tabla~\ref{tab:colapso} da el error de las capas interiores con cada versión del solver.
 
-El autopotencial se resta igual, y no es opcional: quitar la fuerza sin quitar la
-autoenergía deja el diagnóstico de energía sin corresponder a la dinámica, y la
-conservación empeora un factor 40 (de $2.5\times10^{-7}$ a $1.1\times10^{-5}$ en la
-corrida de prueba). Con las dos restas queda en $2.1\times10^{-7}$, mejor que el código
-original. Lo que sobrevive es la suma sobre pares con $j\neq k$, que es lo que la
-ecuación de Vlasov pide.
+\begin{table}[htbp]
+\centering
+\caption{Colapso frío de una esfera uniforme ($R=M=1$, $L=10^{-4}$, $n=1$,
+$\Delta r=0.01$, yoshida4 con $\Delta t=0.0025$): error relativo mediano en $r(t=0.8)$
+para $0.1<r_0<0.9$ frente a la solución del continuo, con $N$ capas. Medido en el binario
+de cada versión.}
+\label{tab:colapso}
+\begin{tabular}{lrrc}
+\toprule
+versión & $N=200$ & $N=800$ & orden en $1/N$ \\
+\midrule
+Runge--Kutta y acoplamiento originales & $9.6\times10^{-5}$ & $8.0\times10^{-5}$ & $\approx0$ \\
+acoplamiento en el origen corregido & $1.9\times10^{-5}$ & $2.5\times10^{-6}$ & $1.5$ \\
+integración de la masa (\S\ref{sec:poisson}) & $1.7\times10^{-5}$ & $\mathbf{9.1\times10^{-7}}$ & $2.1$ \\
+\quad y autofuerza restada & $9.9\times10^{-3}$ & $2.5\times10^{-3}$ & $1.0$ \\
+\quad y restada y cambiada por $-m/2r^{2}$ analítico$^{*}$ & $1.9\times10^{-4}$ & $4.3\times10^{-5}$ & $1.1$ \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+{\footnotesize $^{*}$Variante de prueba, no incorporada al código; con $\Delta t=0.005$.}
+\end{table}
+
+Con la resta el error es $O(1/N)$ y no depende de $\Delta r$ (de $2.4$ a
+$2.5\times10^{-3}$ con $\Delta r$ entre $0.04$ y $0.005$ y $N=800$): es un sesgo de
+muestreo, no un error de malla. Sin ella es $O(1/N^{2})$, 2700 veces menor con $N=800$.
+La última fila muestra que no basta con el valor $-m/2r^{2}$: hay que tratar la masa
+propia igual que la de las vecinas que el núcleo cuenta en parte. Cambiar la parte de
+malla por la forma cerrada mejora respecto de la resta, pero sigue en orden~1. La resta
+duplicaba además el costo de la fuerza (factor $2.09$ en corridas intercaladas
+A--B--B--A).
+
+\paragraph{La corrección de malla.} El esquema no da $-m/2r^{2}$ exacto. Con el integrador
+de~\eqref{eq:poisson_masa} la autofuerza discreta se aparta de~\eqref{eq:autofuerza} en
+\emph{primer} orden en $\Delta r/r$, porque es una integral sobre el ancho propio de la
+partícula, y a lo largo de ese ancho varían en $O(\Delta r/r)$ tanto la medida
+$4\pi r^{2}\dd r$ (la mitad exterior del soporte pesa más) como el $1/r^{2}$ con que se
+interpola de vuelta. Midiendo con la partícula en $r=1$ y la misma fase dentro de la celda,
+el cociente $\big(1-F/F_{\text{auto}}\big)/(\Delta r/r)$ vale $0.709$, $0.765$, $0.798$,
+$0.815$, $0.824$ para $\Delta r=0.2,\,0.1,\,0.05,\,0.025,\,0.0125$: tiende a $5/6$ con
+$n=1,2$ y a $\approx8/9$ con $n=3$. Es un error de primer orden en $\Delta r/r$ sobre un
+término que ya es $O(1/N)$, y converge (aviso siguiente).
+
+Con la fuerza queda también la autoenergía en el potencial con que se calcula la energía,
+así que diagnóstico y dinámica corresponden. En la corrida de prueba
+(\texttt{10\_energia/aa\_sg}) la energía se conserva a $2.5\times10^{-7}$ con la
+autofuerza y a $2.1\times10^{-7}$ sin ella: ese diagnóstico no distingue las dos
+versiones; el colapso sí, por tres órdenes de magnitud.
 
 \begin{aviso}
-\textsc{prueba de aceptación, sin parámetros.} Una partícula con $L=1$, $r_0=1$,
-$\rp=0$, sin fondo y con autogravedad. Sin autofuerza la solución es exactamente
-$r(t)=\sqrt{1+t^{2}}$, el movimiento libre en un plano. En $t=10$ el valor exacto es
-$10.04987562112$; el código daba $10.010672361$ (error relativo $3.9\times10^{-3}$) y
-ahora da $10.049875621$ (error relativo $8\times10^{-12}$, el del integrador temporal).
-Midiendo la fuerza directamente, el residuo de la autofuerza es $\sim10^{-13}$ relativo,
-para cualquier radio y cualquier orden del B-spline.
+\textsc{pruebas de aceptación.} La que decide es el colapso de la
+tabla~\ref{tab:colapso}, en \texttt{verificacion/py/colapso.py}: con $N=200$ y $400$
+exige un error mediano menor que $10^{-4}$ y un orden mayor que $1.5$ en $1/N$. La
+prueba de la capa aislada sigue sirviendo si se le da la referencia correcta: $L=1$,
+$r_0=1$, $\rp=0$, masa $m=0.01$, sin fondo, con autogravedad. Su solución no es el
+movimiento libre, $\sqrt{1+t^{2}}=10.04987562$ en $t=10$, sino la de
+$\ddot r=L^{2}/r^{3}-m/2r^{2}$, $r(10)=10.01047907$. El código da errores relativos de
+$3.8\times10^{-5}$, $1.9\times10^{-5}$, $9.7\times10^{-6}$ y $4.8\times10^{-6}$ con
+$\Delta r=0.02$, $0.01$, $0.005$ y $0.0025$: orden~1 en $\Delta r$, el de la corrección
+de malla. Con la resta, la misma prueba daba $8\times10^{-12}$ frente al movimiento libre:
+pasaba porque su referencia suponía justo lo que había que demostrar.
 \end{aviso}
 
 \subsection{Integradores}
@@ -1316,6 +1373,11 @@ predice.
   \item \textbf{Leer los diagnósticos que nadie usa.} La densidad media de una cáscara
     que escribía el código crecía con $N_L$ (23 y 95 veces la real con $N_L=4$ y $16$): le
     faltaban el peso $L$ y el volumen de celda.
+  \item \textbf{La referencia de una prueba también es una hipótesis.} Quitar la
+    autofuerza pasó su prueba de aceptación con error $8\times10^{-12}$, porque la prueba
+    suponía lo que había que demostrar: que una capa con masa no se atrae a sí misma. Un
+    problema con solución exacta ajena al esquema, el colapso frío, lo refutó por tres
+    órdenes de magnitud (\S\ref{sec:autofuerza}).
 \end{enumerate}
 
 % ===========================================================================
@@ -1465,6 +1527,7 @@ Desde la raíz del repositorio (rama \texttt{mejoras/portar}), con Python~3,
 
 \begin{verbatim}
 make                                   # exe/VP_PIC
+verificacion/correr.sh                 # pruebas de la auditoría, ~1 min
 reproducir/correr.sh 08_verificacion   # 1.3 min
 reproducir/correr.sh 09_fondos         # segundos
 reproducir/correr.sh 10_energia        # segundos
