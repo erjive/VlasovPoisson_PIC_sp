@@ -346,6 +346,63 @@ en `set_grid_size`, después de leerlo. Todo el código de suavizado del términ
 `eps /= 0` de `main.f90:54` no puede fallar nunca. Está documentado en la declaración
 (`parameters.f90:42`) pero un valor puesto en el `.par` se descarta sin aviso.
 
+### 20. El código y el artículo de referencia usan convenios de depósito distintos
+**Estado: MEDIDO, decisión pendiente** (hallado al documentar el integrador)
+
+`Vlasov_Poisson_evolutions/main.md` define el volumen de celda como el geométrico exacto,
+ΔV_k = (4/3)π[(R_{k+1/2})³ − (R_{k−1/2})³] = 4πΔr(R_k² + Δr²/12), y la función de peso
+como W_m = S_m * b₀, la forma de la partícula convolucionada con el promedio de celda. El
+código usa V_i = 4πΔr(r_i² + (n+1)Δr²/12) y aplica `Wn` directamente. Como
+b_m * b₀ = b_{m+1}, el `Wn(n)` del código **sí** es el W_m del artículo con m = n−1; lo que
+no coincide es el volumen.
+
+Son dos convenios coherentes cada uno consigo mismo y ambos de segundo orden:
+ρ_k es el promedio exacto en la celda (artículo) o un estimador puntual insesgado de
+ρ(R_k) (código). El primero conserva la masa exactamente y sesga el perfil de densidad;
+el segundo hace lo contrario. `BUGS_TODO.md` registra el cambio a (n+1)/12 como una
+corrección de error, cuando en realidad alejó el código del artículo.
+
+Medido en la réplica, con Δr = 0.01:
+
+*Masa total vista de una partícula aislada* — artículo exacto (1.0000000000) para todo n
+y todo radio; código exacto solo para n=1 (para n=3 va de 0.751 a 0.99958).
+
+*Esfera uniforme, error relativo de la fuerza dentro:*
+
+| n | código | artículo |
+|---|---|---|
+| 1 | 1.28e−4 | 8.32e−3 |
+| 2 | 4.9e−16 | 1.64e−2 |
+| 3 | 9.6e−16 | 2.46e−2 |
+
+*Plummer (masa concentrada), error relativo de la fuerza:*
+
+| n | región | código | artículo |
+|---|---|---|---|
+| 1 | r < 0.2 | 3.50e−4 | 3.88e−2 |
+| 2 | r < 0.2 | 3.49e−4 | 7.65e−2 |
+| 3 | r < 0.2 | 4.51e−4 | 1.15e−1 |
+| 1 | 0.2 < r < 2 | 2.22e−4 | 3.48e−4 |
+| 1 | 2 < r < 3.9 | 9.94e−6 | 8.70e−6 |
+
+El sesgo del convenio del artículo es n·Δr²/(12r²): crece hacia el centro y con el orden
+del B-spline, hasta el 11 % dentro de r = 0.2 con n = 3. El del código lo deconvoluciona
+y gana por factores de 100 a 250 donde está la masa; el del artículo gana por factores de
+1.5 a 5 en la región exterior de baja densidad.
+
+**Recomendación:** quedarse con el convenio del código y corregir en el artículo tanto
+ΔV_k como el párrafo que describe el Runge–Kutta (§7.2 de las notas explica por qué ese
+algoritmo perdía masa). Queda por comprobar si las corridas ya publicadas tenían masa
+dentro de ~5Δr del origen; con L₀ = 2 la barrera centrífuga probablemente las protege,
+pero no está verificado.
+
+**Mejora posible:** para n ≥ 2, reconstruir ρ entre nodos con el B-spline del mismo orden
+en vez de con una recta recuperaría también la conservación exacta de masa sin perder la
+densidad insesgada. Para n = 1 no hace falta: la recta ya es el sombrero.
+
+**No medido:** energía y h₁ en una corrida con autogravedad bajo el convenio del
+artículo, que exigiría implementarlo en el código.
+
 ---
 
 ## A favor del código
