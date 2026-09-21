@@ -51,6 +51,15 @@ subroutine grav_force
 ! array expressions these were four serial passes and, once the force
 ! evaluation dominated the run, a large part of its cost. The expressions
 ! are the same, so the result is identical to the last bit.
+!
+! The two isochrone branches also write the force the same way. They used to
+! differ: the branch without self-gravity reused the potential it had just
+! computed, -r/sq*pot**2, instead of -r/(sq*(1+sq)**2). The two agree in
+! exact arithmetic but not in floating point -- they differ in the last bit
+! for 222113 of 400002 radii tested -- so a run with negligible mass and
+! autointeraction=.true. did not reproduce the run without it, which is
+! precisely the control this audit leans on (AUDITORIA_2026-09-20.md,
+! point 15).
 
   if (BGtype == "Isochrone") then
 
@@ -77,7 +86,7 @@ subroutine grav_force
          sq  = sqrt(1.D0+r_part(i)**2)
          den = r_part(i)**2 + eps*eps
          pot_part(i)   = (-1.0D0/(1.0D0+sq))
-         force_part(i) = (-r_part(i)/sq*pot_part(i)**2)
+         force_part(i) = (-r_part(i)/(sq*(1.D0+sq)**2))
          pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
          force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
        end do

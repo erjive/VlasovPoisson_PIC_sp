@@ -25,7 +25,7 @@ Los puntos se escribieron leyendo el código; solo la medición decide.
 | 12 | `cutoff` no reporta la masa descartada | pendiente |
 | 13 | constantes de forma compiladas | pendiente |
 | 14 | nombres sobrecargados | pendiente; la mitad de `eps` decae con el punto 19 |
-| 15 | dos ramas del isócrono | pendiente, **confirmado midiendo** |
+| 15 | dos ramas del isócrono | **corregido**, medido |
 | 16 | fondo en los puntos fantasma | pendiente |
 | 17 | Newton sin aviso | pendiente |
 | 18 | lista de celdas y factor de Courant | pendiente |
@@ -423,8 +423,8 @@ las notas ε es la amplitud de la perturbación. Ninguna colisión está adverti
 en un `.par`, nadie tropieza con la colisión de nombres en la práctica. Queda la de
 `sp`/`sr`, que sí son parámetros de entrada y sí cambian de significado según el estado.
 
-### 15. Las dos ramas del isócrono no son idénticas bit a bit
-**Estado: PENDIENTE, CONFIRMADO midiendo** (2026-09-20)
+### 15. Las dos ramas del isócrono no eran idénticas bit a bit
+**Estado: CORREGIDO** (2026-09-20)
 
 `grav_force.f90:64` escribe la fuerza como `-r/(sq*(1+sq)**2)` y `grav_force.f90:80` como
 `-r/sq*pot**2`: iguales en aritmética exacta, no en punto flotante. El comentario de las
@@ -440,6 +440,11 @@ espejismo: `save2Ddata_particles` escribe solo ocho cifras.)
 Vale la pena arreglarlo porque la propiedad perdida es útil: con masa despreciable, una
 corrida con autogravedad debería reproducir exactamente la corrida sin ella, y eso es
 justo el control que hemos usado varias veces en esta auditoría.
+
+**Corrección.** Las dos ramas escriben ahora la fuerza igual,
+`-r/(sq*(1+sq)**2)`. Prueba de aceptación: las mismas dos corridas de arriba dan
+`hk1_complex.tl`, `hk2_complex.tl`, la energía y el archivo de partículas **idénticos bit
+a bit**.
 
 ### 16. El fondo se suma a los puntos fantasma en unas ramas y no en otras
 **Estado: PENDIENTE**
