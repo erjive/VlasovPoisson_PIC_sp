@@ -31,7 +31,7 @@ Los puntos se escribieron leyendo el código; solo la medición decide.
 | 18 | lista de celdas y factor de Courant | pendiente |
 | 19 | `eps` | **enunciado erróneo**, severidad rebajada |
 | 20 | convenio del depósito | medido, decisión pendiente |
-| 21 | el equilibrio no lo es del sistema discreto | **confirmado**, medido por tres vías |
+| 21 | el equilibrio no lo era del sistema discreto | desajuste **corregido**; la causa de la deriva sigue abierta |
 
 
 ---
@@ -549,8 +549,8 @@ densidad insesgada. Para n = 1 no hace falta: la recta ya es el sombrero.
 **No medido:** energía y h₁ en una corrida con autogravedad bajo el convenio del
 artículo, que exigiría implementarlo en el código.
 
-### 21. El equilibrio de `tools/equilibrio_L.py` no es un equilibrio del sistema discreto
-**Estado: CONFIRMADO** (2026-09-20)
+### 21. El equilibrio de `tools/equilibrio_L.py` no era un equilibrio del sistema discreto
+**Estado: CORREGIDO el desajuste; el diagnóstico sobre la deriva era ERRÓNEO** (2026-09-20)
 
 Al medir el ruido con un equilibrio autoconsistente y `eps = 0` — una configuración que
 no debería evolucionar — la señal |h₁(t)−h₁(0)| a t=100 resultó ser:
@@ -606,12 +606,46 @@ como tal; hace falta otro diseño para medirlo. (b) Toda corrida que entre por
 `state=checkpoint` con un equilibrio arrastra ese desajuste, que no mejora al subir N
 porque es un efecto de la malla, no del muestreo.
 
-**Arreglo propuesto.** Iterar el equilibrio contra el solver **del código** en vez del de
-Python. No hace falta llamar al binario: la réplica del esquema (depósito con V_i, la
-cuadratura de masa de §7.2 y la interpolación) reproduce al código a ocho cifras, así que
-basta con sustituir la Poisson continua de `tools/equilibrio_L.py` por esa. Mientras no se
-haga, conviene decir en las notas que los equilibrios son aproximados al nivel de 1e−4
-relativo.
+**Arreglo, hecho.** `tools/equilibrio_L.py` itera ahora contra el solver del código: la
+clase `PoissonCodigo` reproduce el depósito con W_n y V_i, la cuadratura de masa y la
+interpolación de vuelta, y en cada paso del punto fijo se colocan los mismos nodos que se
+van a escribir, se depositan y se resuelve como en el código. La réplica coincide con el
+Fortran hasta el suelo de precisión del archivo de salida (3.1e−07 relativo). Converge en
+seis iteraciones a 1.6e−13 y tarda 80 s con 8000 nodos.
+
+Y funciona para lo que se hizo:
+
+| | max\|Φ_código − Φ_generador\| / profundidad |
+|---|---|
+| generador continuo | 9.0e−05 |
+| solver del código | **3.1e−07** (el suelo del archivo) |
+
+**Pero no era la causa de la deriva, y ahí me equivoqué.** Con el equilibrio nuevo,
+|h₁(fin)−h₁(0)| pasa de 2.1183e−11 a 2.1700e−11: no baja. Las tres vías que había
+llamado "confirmación" no lo eran: el desajuste existía y el orden de magnitud cuadraba,
+pero corregirlo no cambia la deriva, así que la coincidencia numérica era casual.
+
+**Lo que sí queda establecido**, que es una lista de sospechosos descartados:
+
+| se varió | la deriva |
+|---|---|
+| dt, dt/2, dt/4 | 2.118272e−11, 2.118269e−11, 2.118268e−11 (seis cifras iguales) |
+| dr = 0.05 → 0.025 | 2.1700e−11 → 2.3176e−11 |
+| N = 8000 → 64000 | 2.1183e−11 → 1.6868e−11 |
+| Φ del generador corregido | 2.1183e−11 → 2.1700e−11 |
+
+No es el integrador temporal, no es la malla ni el depósito, no es el muestreo de
+partículas y no es el desajuste de Φ. **La causa sigue abierta.**
+
+El sospechoso que encaja con las cuatro filas — algo independiente de dt, de dr y de N —
+es la precisión de la maquinaria ángulo–acción de Python (`MapaAA`: cuadratura de
+Gauss–Legendre con 64 nodos, bisección de los puntos de retorno, la spline de Φ sobre la
+malla fina, el Newton de `invertir`). Si las acciones tienen un error, F_eq no es
+exactamente función de las acciones verdaderas y evoluciona. Prueba siguiente: subir el
+orden de la cuadratura y la resolución de la malla fina y ver si la deriva baja.
+
+Mientras tanto: la deriva de 2e−11 sobre |h₀| = 1.06e−06 es un 2e−05 relativo en t=100, y
+hay que citarla como cota de lo que estos equilibrios pueden resolver.
 
 ---
 
