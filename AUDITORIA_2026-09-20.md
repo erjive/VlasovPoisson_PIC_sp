@@ -275,11 +275,33 @@ Prueba de aceptación: las 500 órbitas circulares de arriba, en una corrida rea
 h₀ sobrevivía porque no usa el ángulo; a partir de k=1 el factor exp(−ikQ) propagaba el
 NaN a todo el acumulador.
 
-### 6. Arreglos automáticos de tamaño `Npart` en la pila
-**Estado: PENDIENTE**
+### 6. Arreglos automáticos de tamaño `Npart` (el riesgo que enuncié no existe)
+**Estado: CORREGIDO, pero por otra razón que la que dije** (2026-09-20)
 
-`analysish.f90:31-32` declara nueve arreglos automáticos de longitud `Npart`: 72 MB de
-pila con 10⁶ partículas. Segfault dependiente del `ulimit -s`, justo al escalar N.
+`analysish.f90` declaraba nueve arreglos automáticos de longitud `Npart`. Escribí que
+eran 72 MB de pila con 10⁶ partículas y un segfault dependiente del `ulimit -s`.
+**Eso no se reproduce**: con 10⁶ partículas y el límite de pila por omisión (8192 kB) la
+versión con arreglos corre sin problema, porque gfortran con estas banderas no los pone
+en la pila.
+
+Lo que sí es real es el consumo. Con 10⁶ partículas, pico de memoria del proceso:
+
+| | pico | |
+|---|---|---|
+| con arreglos | 152 420 kB | |
+| sin ellos | **90 044 kB** | −41 % |
+
+**Corrección.** Nada se comparte entre partículas, así que el mapa ángulo–acción se
+calcula con escalares dentro del lazo paralelo y los nueve arreglos desaparecen. La
+salida es **idéntica bit a bit** (hk1.tl, hk1\_complex.tl, hk2.tl y la energía, corrida de
+equilibrio con 8000 partículas y 8000 pasos).
+
+El precio es tiempo: con 10⁵ partículas y 200 llamadas a `analysish`, el mejor de tres
+pasa de 4.74 s a 5.10 s, un 7 % más. Las expresiones sobre arreglos completos
+vectorizaban mejor que el lazo escalar con sus ramas. En producción `analysish` corre
+cada `spatial_output` pasos (40 en las corridas de referencia), así que ese 7 % es una
+fracción pequeña del total, y a cambio el programa ocupa un 41 % menos en el caso que
+importa para escalar N.
 
 ### 7. `courant = 80.0` en un archivo de parámetros distribuido
 **Estado: PENDIENTE**

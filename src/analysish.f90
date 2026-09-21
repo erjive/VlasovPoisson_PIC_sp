@@ -28,10 +28,16 @@
 
     implicit none
 
-    real(8),dimension(1:Npart) :: Qr,Jr      !Action angle arrays
-    real(8),dimension(1:Npart) :: energy,s, s1, s2, er1, er2,argaux
     complex(8) :: ii                          !imaginary unit
-    complex(8) :: expv                        !exp(-ii*Qr(j)) for the current particle
+    complex(8) :: expv                        !exp(-ii*Q) for the current particle
+
+!   Angle-action variables of the particle the loop is on. They used to be
+!   nine automatic arrays of length Npart, 72 MB of stack with a million
+!   particles and a segfault depending on the shell's limit, right where one
+!   wants to raise N (AUDITORIA_2026-09-20.md, point 6). Nothing is shared
+!   between particles, so they are scalars inside the parallel loop.
+
+    real(8) :: en,disc,ra1,ra2,ss,ss1,ss2,aux,Qj,Jj
     complex(8),dimension(0:4) :: hk1,hk2      !h_k modes of each test function
     real(8),dimension(0:4) :: abs_hk1,abs_hk2
     integer  :: i,j,k                         !Counters
@@ -60,54 +66,6 @@
     ! Constants
     smallpi =  acos(-1.0d0)
 
-! Every radicand of the map is clamped at zero. All of them vanish on a
-! circular orbit -- the discriminant, the two turning points and the
-! eccentricity -- so rounding alone can make them slightly negative, and a
-! single NaN would spread to every h_k through the sum below. It is the
-! protection the other two copies of this map already carry (utils.f90) and
-! that was missing only here (AUDITORIA_2026-09-20.md, point 5).
-!
-! The degenerate case is harmless on its own account: on a circular orbit
-! the radial action vanishes and the test function carries a factor J**2, so
-! such a particle contributes exactly nothing whatever angle it is given.
-!
-! er1 holds the discriminant while it is needed, to avoid one more array of
-! length Npart on the stack.
-
-    energy = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part**2)) + 0.5d0*l_part**2/(r_part**2) + 0.5D0*p_part**2
-    er1 = dsqrt(max(1.d0+2.d0*energy*(2.d0+2.d0*energy+l_part**2),0.0d0))
-    er2 = dsqrt(max((1.d0+energy*(2.d0+l_part**2)+er1)/(2.d0*energy**2),0.0d0))
-    er1 = dsqrt(max((1.d0+energy*(2.d0+l_part**2)-er1)/(2.d0*energy**2),0.0d0))
-    s1 = 1.d0 + sqrt(1.d0+er1**2)
-    s2 = 1.d0 + sqrt(1.d0+er2**2)
-    s  = 1.d0 + sqrt(1.d0+r_part**2)
-    where (s2 > s1)
-      argaux = (s1+s2-2.0d0*s)/(s2-s1)
-    elsewhere
-      argaux = 0.0d0
-    end where
-    Jr = 1.d0/sqrt(-2.d0*energy)-0.5d0*(l_part+sqrt(l_part**2+4.d0))
-
-    do i=1,Npart
-
-!         Unbound particles have no angle-action variables and are left out
-!         of the sum below, so there is no point in building a NaN for them.
-          if (energy(i) >= 0.d0) then
-            Qr(i) = 0.d0
-            cycle
-          end if
-
-          if (p_part(i)>=0.d0) then
-            eta = dacos(sign(min(abs(argaux(i)),1.0d0),argaux(i)))
-
-          else
-            eta = dacos(-sign(min(abs(argaux(i)),1.0d0),argaux(i)))+smallpi
-          end if
-
-          Qr(i) = eta - sqrt((-2.d0*energy(i))**3) &
-                  *sqrt(max(-l_part(i)**2-2.d0*energy(i)-2.d0-0.5D0/energy(i),0.0d0)) &
-                  /(-2.d0*energy(i))*sin(eta)
-    end do
     ii = (0.d0,1.d0)
 
 ! The angular Fourier coefficients of A_n,
@@ -165,21 +123,60 @@
     part1 = (0.d0,0.d0)
     part2 = (0.d0,0.d0)
 
-    !$OMP PARALLEL PRIVATE(j,i,w1,w2,expv,tid,loc1,loc2)
+    !$OMP PARALLEL PRIVATE(j,i,w1,w2,expv,tid,loc1,loc2) &
+    !$OMP PRIVATE(en,disc,ra1,ra2,ss,ss1,ss2,aux,eta,Qj,Jj)
     loc1 = (0.d0,0.d0)
     loc2 = (0.d0,0.d0)
     !$OMP DO SCHEDULE(STATIC)
     do j=1,Npart
 
-      if (energy(j) >= 0.d0) cycle
+      en = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part(j)**2)) + 0.5d0*l_part(j)**2/(r_part(j)**2) &
+           + 0.5D0*p_part(j)**2
 
-      w1 = f(j)*l_part(j)*Jr(j)**2*exp(-(Jr(j)-j1)**2/sj1**2)*exp(-(l_part(j)-lt1)**2/slt1**2)
-      w2 = f(j)*l_part(j)*Jr(j)**2*exp(-(Jr(j)-j2)**2/sj2**2)*exp(-(l_part(j)-lt2)**2/slt2**2)
+      if (en >= 0.d0) cycle
+
+!     Every radicand of the map is clamped at zero. All of them vanish on a
+!     circular orbit -- the discriminant, the two turning points and the
+!     eccentricity -- so rounding alone can make them slightly negative, and
+!     a single NaN would spread to every h_k through the sum below. It is the
+!     protection the other two copies of this map already carry (utils.f90)
+!     and that was missing only here (AUDITORIA_2026-09-20.md, point 5).
+!
+!     The degenerate case is harmless on its own account: on a circular orbit
+!     the radial action vanishes and the test function carries a factor J**2,
+!     so such a particle contributes exactly nothing whatever angle it gets.
+
+      disc = dsqrt(max(1.d0+2.d0*en*(2.d0+2.d0*en+l_part(j)**2),0.0d0))
+      ra2  = dsqrt(max((1.d0+en*(2.d0+l_part(j)**2)+disc)/(2.d0*en**2),0.0d0))
+      ra1  = dsqrt(max((1.d0+en*(2.d0+l_part(j)**2)-disc)/(2.d0*en**2),0.0d0))
+      ss1  = 1.d0 + sqrt(1.d0+ra1**2)
+      ss2  = 1.d0 + sqrt(1.d0+ra2**2)
+      ss   = 1.d0 + sqrt(1.d0+r_part(j)**2)
+
+      if (ss2 > ss1) then
+        aux = (ss1+ss2-2.0d0*ss)/(ss2-ss1)
+      else
+        aux = 0.0d0
+      end if
+
+      if (p_part(j)>=0.d0) then
+        eta = dacos(sign(min(abs(aux),1.0d0),aux))
+      else
+        eta = dacos(-sign(min(abs(aux),1.0d0),aux))+smallpi
+      end if
+
+      Qj = eta - sqrt((-2.d0*en)**3) &
+           *sqrt(max(-l_part(j)**2-2.d0*en-2.d0-0.5D0/en,0.0d0))/(-2.d0*en)*sin(eta)
+
+      Jj = 1.d0/sqrt(-2.d0*en)-0.5d0*(l_part(j)+sqrt(l_part(j)**2+4.d0))
+
+      w1 = f(j)*l_part(j)*Jj**2*exp(-(Jj-j1)**2/sj1**2)*exp(-(l_part(j)-lt1)**2/slt1**2)
+      w2 = f(j)*l_part(j)*Jj**2*exp(-(Jj-j2)**2/sj2**2)*exp(-(l_part(j)-lt2)**2/slt2**2)
 
       loc1(0) = loc1(0) + w1*ak1(0)
       loc2(0) = loc2(0) + w2*ak2(0)
 
-      expv = exp(-ii*Qr(j))
+      expv = exp(-ii*Qj)
       do i=1,mode
         loc1(i) = loc1(i) + w1*ak1(i)*expv**i
         loc2(i) = loc2(i) + w2*ak2(i)*expv**i
