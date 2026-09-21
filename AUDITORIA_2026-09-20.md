@@ -5,7 +5,34 @@ que rompan la física que se quiere describir. Las afirmaciones marcadas como *m
 se comprobaron replicando el esquema (depósito, RK2 de Poisson, interpolación) en un
 programa independiente, no leyendo el código.
 
-Estado de cada punto: PENDIENTE / EN CURSO / CORREGIDO (con el commit).
+Estado de cada punto. **Reevaluado el 2026-09-20 tras corregir los seis primeros**: dos
+enunciados no sobrevivieron a su propia prueba de aceptación y uno se confirmó midiendo.
+Los puntos se escribieron leyendo el código; solo la medición decide.
+
+| # | punto | estado |
+|---|---|---|
+| 1 | autofuerza | **corregido**, medido |
+| 2 | masa perdida cerca del origen | **corregido**, medido |
+| 3 | `BGtype=null` acumulaba fuerza | **corregido**, medido |
+| 4 | paridad de los fondos en r | **corregido**, medido |
+| 5 | radicandos sin proteger | **corregido**, medido |
+| 6 | arreglos de tamaño `Npart` | **corregido**, pero el riesgo enunciado no existía |
+| 7 | `courant > 1` sin verificar | pendiente; **peor de lo dicho**: 6 archivos, no 1 |
+| 8 | paso de tiempo sin frecuencia orbital | pendiente; **demostrado** al corregir el 4 |
+| 9 | mapa ángulo–acción triplicado | pendiente, sigue en tres archivos |
+| 10 | pruebas de verificación degeneradas | **parcialmente atendido** |
+| 11 | "densidad uniforme exacta" con n=1 | pendiente, la afirmación sigue en el fuente |
+| 12 | `cutoff` no reporta la masa descartada | pendiente |
+| 13 | constantes de forma compiladas | pendiente |
+| 14 | nombres sobrecargados | pendiente; la mitad de `eps` decae con el punto 19 |
+| 15 | dos ramas del isócrono | pendiente, **confirmado midiendo** |
+| 16 | fondo en los puntos fantasma | pendiente |
+| 17 | Newton sin aviso | pendiente |
+| 18 | lista de celdas y factor de Courant | pendiente |
+| 19 | `eps` | **enunciado erróneo**, severidad rebajada |
+| 20 | convenio del depósito | medido, decisión pendiente |
+| 21 | el equilibrio no lo es del sistema discreto | **nuevo**, hallado midiendo el ruido |
+
 
 ---
 
@@ -311,11 +338,20 @@ fracción de Courant (`parameters.f90:45`). Solo tiene sentido con `integrator =
 donde dt únicamente espacia las instantáneas. Nada lo verifica: cambiar el integrador en
 ese archivo da dt = 4 sin aviso.
 
+**Reevaluación:** es más extendido de lo que escribí. Contando los `.par` distribuidos,
+`courant` vale 20.0 en cinco de ellos y 80.0 en uno; solo catorce usan 0.5 y ocho valores
+menores. Seis archivos, no uno.
+
 ### 8. El criterio de paso de tiempo desconoce la frecuencia orbital
 **Estado: PENDIENTE (documentado en el fuente)**
 
 `utils.f90:251-255` lo documenta, incluido el caso nfw que divergió. La prueba de
 convergencia queda a cargo del usuario y nada la exige.
+
+**Reevaluación:** dejó de ser una objeción teórica. La prueba de aceptación del punto 4
+— una órbita radial en el fondo `nfw` — conserva la energía al 4 % con el paso que el
+código elige solo, y ese 4 % es enteramente el paso de tiempo. Es el mismo número que
+mediría cualquiera que use una cúspide.
 
 ### 9. El mapa ángulo–acción está triplicado
 **Estado: PENDIENTE**
@@ -328,13 +364,21 @@ La misma transformación directa en `initial_data.f90:107-124`, `utils.f90:763-7
 ## SEVERIDAD BAJA, Y DUDAS
 
 ### 10. Las pruebas de verificación son degeneradas respecto de lo que deben probar
-**Estado: PENDIENTE**
+**Estado: PARCIALMENTE ATENDIDO**
 
 La esfera uniforme es exactamente el caso que la fórmula
 V_i = 4πdr(r_i² + (n+1)dr²/12) hace exacto por construcción, y también el caso en que el
 arranque del RK2 (densidad constante dentro de r(1)) es exacto. Un esquema con los
 defectos 1 y 2 pasa esa prueba sin marcas. Hacen falta casos que el diseño no privilegie:
 cáscara única cerca del origen, órbitas radiales, convergencia en N a dr fijo.
+
+**Reevaluación:** el diagnóstico está ya escrito en §7.2 de
+`docs/introduccion/vlasov_L_intro.tex`, y las correcciones 1 a 6 produjeron justamente
+las pruebas que faltaban: cáscara aislada a distintos radios, movimiento libre
+r(t)=√(1+t²) con y sin autogravedad, órbita radial que cruza el origen en un fondo con
+cúspide, 500 órbitas exactamente circulares, esfera uniforme, Plummer, y un millón de
+partículas. Lo que falta es **moverlas al repositorio**: hoy viven en el directorio de
+trabajo de la sesión, no en `reproducir/`, así que nadie más las puede repetir.
 
 ### 11. "Una densidad uniforme se reproduce exactamente" es falso para el orden por omisión
 **Estado: PENDIENTE**
@@ -375,13 +419,27 @@ depende del binario, no del archivo de parámetros.
 (`distribution.f90:121`). `eps` en el código es el suavizado centrífugo, mientras que en
 las notas ε es la amplitud de la perturbación. Ninguna colisión está advertida.
 
+**Reevaluación:** la mitad de `eps` pierde fuerza con el punto 19: como no se puede poner
+en un `.par`, nadie tropieza con la colisión de nombres en la práctica. Queda la de
+`sp`/`sr`, que sí son parámetros de entrada y sí cambian de significado según el estado.
+
 ### 15. Las dos ramas del isócrono no son idénticas bit a bit
-**Estado: PENDIENTE**
+**Estado: PENDIENTE, CONFIRMADO midiendo** (2026-09-20)
 
 `grav_force.f90:64` escribe la fuerza como `-r/(sq*(1+sq)**2)` y `grav_force.f90:80` como
 `-r/sq*pot**2`: iguales en aritmética exacta, no en punto flotante. El comentario de las
 líneas 52-53 afirma identidad bit a bit, pero esa afirmación cubre el refactor de arreglos
 a bucles, no la comparación entre ramas.
+
+**Medido.** Las dos expresiones difieren en el último bit en 222 113 de 400 002 radios
+probados, con diferencia relativa de hasta 5.7e−16. En el código: dos corridas idénticas
+salvo `autointeraction`, con a0 = 1e−300 para que la autogravedad no influya, dan
+`hk1_complex.tl` **distintos**. (El archivo de partículas sale idéntico, pero eso es un
+espejismo: `save2Ddata_particles` escribe solo ocho cifras.)
+
+Vale la pena arreglarlo porque la propiedad perdida es útil: con masa despreciable, una
+corrida con autogravedad debería reproducir exactamente la corrida sin ella, y eso es
+justo el control que hemos usado varias veces en esta auditoría.
 
 ### 16. El fondo se suma a los puntos fantasma en unas ramas y no en otras
 **Estado: PENDIENTE**
@@ -480,6 +538,36 @@ densidad insesgada. Para n = 1 no hace falta: la recta ya es el sombrero.
 
 **No medido:** energía y h₁ en una corrida con autogravedad bajo el convenio del
 artículo, que exigiría implementarlo en el código.
+
+### 21. El equilibrio de `tools/equilibrio_L.py` no es un equilibrio del sistema discreto
+**Estado: NUEVO** (hallado al medir el piso de ruido)
+
+Al medir el ruido con un equilibrio autoconsistente y `eps = 0` — una configuración que
+no debería evolucionar — la señal |h₁(t)−h₁(0)| a t=100 resultó ser:
+
+| N | n=1 | n=2 |
+|---|---|---|
+| 8 000 | 2.118e−11 | 2.084e−11 |
+| 16 000 | 1.857e−11 | 1.808e−11 |
+| 32 000 | 1.740e−11 | 1.690e−11 |
+| 64 000 | 1.687e−11 | 1.636e−11 |
+
+Dos lecturas. La primera, buscada: **n=2 no compra nada**, un 3 %, lo que cierra la
+decisión sobre el orden del B-spline y deja la reconstrucción de orden coincidente como
+mejora disponible pero sin uso.
+
+La segunda, no buscada y más importante: la señal **apenas baja con N** (factor 1.26 al
+multiplicar N por 8, con la razón entre pasos consecutivos tendiendo a 0.97). El ruido de
+discreción debería caer con N; esto satura. La explicación más plausible es que el
+equilibrio que construye el generador no es equilibrio del sistema **discreto**: su
+Φ_self, calculado con el mapa ángulo–acción en Python, difiere del que calcula la malla
+del código, y esa diferencia produce una evolución sistemática independiente de N.
+
+Consecuencias: (a) esa prueba **no mide el piso de discreción**, así que no se puede citar
+como tal; (b) cualquier corrida que entre por `state=checkpoint` con un equilibrio
+arrastra ese desajuste. Falta comprobarlo directamente — comparar el Φ_self del
+generador con el de la malla para la misma distribución — y, si se confirma, iterar el
+equilibrio contra el solver del código en vez de contra el de Python.
 
 ---
 
