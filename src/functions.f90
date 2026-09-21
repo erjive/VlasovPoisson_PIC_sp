@@ -3,10 +3,10 @@
 ! ===========================================================================
 !> Weight functions of the particle-grid coupling: the B-splines W_n of order
 !! n = 1 (linear, cloud in cell), 2 (quadratic) and 3 (cubic), in units of the
-!! grid spacing. The same W_n deposits the mass on the grid and interpolates
-!! the field back to the particles, which avoids a self-force. W_n has unit
-!! area, vanishes for |y| >= (n+1)/2 and its weights on a uniform grid add up
-!! to one.
+!! grid spacing. The same W_n deposits the mass and interpolates the field
+!! back; in spherical symmetry a particle then feels its own shell, -m/(2r**2),
+!! which is physical (see poisson_rk). W_n has unit area, vanishes for
+!! |y| >= (n+1)/2 and its weights on a uniform grid add up to one.
 
 module functions
 

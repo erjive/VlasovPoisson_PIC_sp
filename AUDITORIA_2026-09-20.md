@@ -11,7 +11,7 @@ Los puntos se escribieron leyendo el código; solo la medición decide.
 
 | # | punto | estado |
 |---|---|---|
-| 1 | autofuerza | **corregido**, medido |
+| 1 | autofuerza | **revertido** el 2026-09-21: la resta era el error (AUDITORIA_CIENTIFICA_2026-09-21.md, D1) |
 | 2 | masa perdida cerca del origen | **corregido**, medido |
 | 3 | `BGtype=null` acumulaba fuerza | **corregido**, medido |
 | 4 | paridad de los fondos en r | **corregido**, medido |
@@ -39,7 +39,13 @@ Los puntos se escribieron leyendo el código; solo la medición decide.
 ## SEVERIDAD ALTA
 
 ### 1. El esquema tenía autofuerza, y el código afirmaba lo contrario
-**Estado: CORREGIDO** (2026-09-20)
+**Estado: REVERTIDO** (2026-09-21). La medición de abajo es correcta: el esquema da
+−m/(2r²) sobre cada partícula. La interpretación no: es la autogravedad física de una
+cáscara, no un sesgo que haya que restar. Restarla (`bfd9b29`) llevó el error del colapso
+frío frente al continuo de O(1/N²) a O(1/N) (9·10⁻⁷ → 2.5·10⁻³ con N = 800) y duplicó el
+costo; se revirtió. La prueba de la partícula libre tenía la referencia equivocada: una
+cáscara con masa no se mueve libre. Ver AUDITORIA_CIENTIFICA_2026-09-21.md, D1, y
+`vlasov_L_intro.tex`, sección "La autofuerza". Lo que sigue queda como registro.
 
 `functions.f90:7` y la cabecera de `density.f90` afirman que usar el mismo `W_n` para
 depositar e interpolar evita la autofuerza. *Medido*: una cáscara aislada de masa 1
