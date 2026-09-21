@@ -708,6 +708,99 @@ La lección de método: un caso de prueba que coincide con la hipótesis de dise
 esquema no prueba el esquema.
 \end{aviso}
 
+\subsection{El convenio del depósito}
+\label{sec:convenio}
+
+La reconstrucción lineal de~\S\ref{sec:poisson} es la respuesta correcta para el convenio
+que usa este código, y conviene decir cuál es, porque no es el único razonable ni el que
+usa el manuscrito de referencia (\texttt{Vlasov\_Poisson\_evolutions/main.md}, en
+preparación). La pregunta de fondo es qué es exactamente $\rho_i$.
+
+\paragraph{El convenio del manuscrito.} Allí la partícula es una capa cuyo perfil de
+\emph{masa} es $S_m(r-r_j)$, de modo que la densidad es
+\begin{equation}
+  \rho(r)=\frac{m}{4\pi r^{2}}\sum_j N_j\,S_m(r-r_j),
+\end{equation}
+y lo que se pone en la malla es el promedio exacto sobre la celda,
+\begin{equation}
+  \bar\rho_k:=\frac{1}{\Delta V_k}\int_{R_{k-1/2}}^{R_{k+1/2}}4\pi\rho\,r^{2}\dd r
+  =\frac{m}{\Delta V_k}\sum_j N_j\,W_m(R_k-r_j),
+  \label{eq:rho_manuscrito}
+\end{equation}
+donde el $r^{2}$ se cancela exactamente, $W_m:=S_m*b_0$ es la forma de la partícula
+convolucionada con el promedio de celda, y
+\begin{equation}
+  \Delta V_k=\tfrac43\pi\big[(R_{k+1/2})^{3}-(R_{k-1/2})^{3}\big]
+  =4\pi\Delta r\Big(R_k^{2}+\tfrac{1}{12}\Delta r^{2}\Big)
+\end{equation}
+es el volumen geométrico exacto de la celda.
+
+\paragraph{El convenio del código.} Aquí se aplica $W_n$ directamente, sin el paso $b_0$,
+y el volumen lleva el segundo momento de $W_n$ en lugar del de $b_0$:
+$V_i=4\pi\Delta r\big(r_i^{2}+\tfrac{n+1}{12}\Delta r^{2}\big)$.
+
+Como $b_m*b_0=b_{m+1}$, \emph{las funciones de peso coinciden}: el $W_n$ del código es el
+$W_m$ del manuscrito con $m=n-1$. Lo que no coincide es el volumen, y con él el
+significado de $\rho_i$: promedio de celda allá, estimador puntual insesgado de
+$\rho(R_i)$ acá. Los dos son de segundo orden y cada uno es coherente consigo mismo, pero
+compran cosas distintas:
+\begin{equation*}
+\begin{array}{lll}
+\textbf{manuscrito} & \sum_k\bar\rho_k\Delta V_k=M\ \text{exacta} &
+  \text{sesgo }n\Delta r^{2}/12r^{2}\text{ en el perfil}\\[2pt]
+\textbf{código} & \text{densidad uniforme exacta} &
+  \text{masa exacta sólo para }n=1
+\end{array}
+\end{equation*}
+
+\paragraph{Cuál conviene.} Es una cuestión empírica, y las tres pruebas de la
+tabla~\ref{tab:convenios} la deciden. El sesgo del manuscrito, $n\Delta r^{2}/12r^{2}$,
+crece hacia el centro y con el orden del B-spline: llega al 11\,\% dentro de $r=0.2$ con
+$n=3$. Como en un sistema autogravitante el error que pesa es el de la región donde está
+la masa, el convenio del código gana por factores de 100 a 250 ahí, y pierde por factores
+de 1.5 a 5 en la región exterior de baja densidad, donde manda la conservación exacta de
+la masa.
+
+\begin{table}[htbp]
+\centering
+\caption{Los dos convenios sobre las mismas pruebas, con $\Delta r=0.01$. Arriba, masa
+total que el campo registra para una sola partícula de masa~1. Abajo, error relativo de
+la fuerza para una esfera uniforme y para un perfil de Plummer
+$\rho=(3/4\pi)(1+r^2)^{-5/2}$, ambos muestreados densamente.}
+\label{tab:convenios}
+\begin{tabular}{llrr}
+\toprule
+prueba & $n$ & código & manuscrito \\
+\midrule
+masa, $r_j=0.5\Delta r$  & 1 & $1.0000000$ & $1.0000000$ \\
+masa, $r_j=0.5\Delta r$  & 3 & $0.7511521$ & $\mathbf{1.0000000}$ \\
+masa, $r_j=20\Delta r$   & 3 & $0.9995826$ & $\mathbf{1.0000000}$ \\
+\midrule
+esfera uniforme, $r<0.95$ & 1 & $\mathbf{1.28\times10^{-4}}$ & $8.32\times10^{-3}$ \\
+esfera uniforme, $r<0.95$ & 3 & $\mathbf{9.6\times10^{-16}}$ & $2.46\times10^{-2}$ \\
+\midrule
+Plummer, $r<0.2$          & 1 & $\mathbf{3.50\times10^{-4}}$ & $3.88\times10^{-2}$ \\
+Plummer, $r<0.2$          & 3 & $\mathbf{4.51\times10^{-4}}$ & $1.15\times10^{-1}$ \\
+Plummer, $0.2<r<2$        & 1 & $\mathbf{2.22\times10^{-4}}$ & $3.48\times10^{-4}$ \\
+Plummer, $2<r<3.9$        & 1 & $9.94\times10^{-6}$ & $\mathbf{8.70\times10^{-6}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{aviso}
+\textsc{lo que queda abierto.} Primero, el manuscrito describe el Runge--Kutta
+de~\S\ref{sec:poisson} y la definición de $\Delta V_k$ de
+arriba; ambas cosas hay que actualizarlas si ha de describir este código. Segundo, el
+defecto de masa del Runge--Kutta es una propiedad del algoritmo que el manuscrito
+describe, no de una mala implementación: habría que comprobar si sus corridas con
+autogravedad tuvieron masa dentro de unos $5\Delta r$ del origen. Con $L_0=2$ la barrera
+centrífuga probablemente las protege, pero está sin verificar. Tercero, el único punto
+débil del convenio del código tiene arreglo: para $n\ge2$, reconstruir $\rho$ entre nodos
+con el B-spline del mismo orden en vez de con una recta recuperaría también la
+conservación exacta de la masa sin perder la densidad insesgada. Para $n=1$ no hace
+falta, porque la recta ya \emph{es} el sombrero.
+\end{aviso}
+
 \subsection{La autofuerza}
 \label{sec:autofuerza}
 
