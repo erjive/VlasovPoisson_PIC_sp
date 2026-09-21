@@ -202,8 +202,8 @@ Prueba de aceptación: una partícula con L=1, r₀=1, p₀=0, `BGtype=null`,
 
 ## SEVERIDAD MEDIA
 
-### 4. Los fondos NFW y Burkert no tienen la paridad correcta en r
-**Estado: PENDIENTE**
+### 4. Los fondos NFW y Burkert no tenían la paridad correcta en r
+**Estado: CORREGIDO** (2026-09-20)
 
 El código deja que r sea negativo dentro de un paso (la reflexión está en `main.f90:239`,
 después del integrador) y la interpolación de malla lo maneja con el espejo; los fondos
@@ -218,8 +218,24 @@ analíticos no. *Medido*, fuerza en r = −0.05 contra la extensión impar corre
 
 Solo se dispara con L≈0, que es el régimen en que se usaría una cúspide.
 
-### 5. Raíz sin proteger en `analysish`: un NaN de órbita casi circular envenena los h_k
-**Estado: PENDIENTE**
+**Corrección.** `bgpot` y `bgforce` evalúan ahora las formas cerradas en |r| y la fuerza
+lleva el signo de r. El fondo `Central`, que vive fuera de esas dos funciones, se arregló
+igual (su potencial era impar y su fuerza par, las dos al revés de lo que deben ser).
+
+Prueba de aceptación: una partícula con L ≈ 0 soltada en reposo en r = 1 en el fondo
+`nfw`, sin autogravedad, que oscila cruzando el origen unas treinta veces. Error relativo
+máximo de la energía:
+
+| | max\|ΔE/E₀\| |
+|---|---|
+| antes | 6.32e−01 |
+| después | **4.00e−02** |
+
+El 4 % que queda no es paridad: es el paso de tiempo, que no conoce la frecuencia orbital
+de una órbita que se hunde en una cúspide (punto 8).
+
+### 5. Raíz sin proteger en `analysish`: un NaN de órbita casi circular envenenaba los h_k
+**Estado: CORREGIDO** (2026-09-20)
 
 `analysish.f90:81-82` calcula `sqrt(-L²-2E-2-0.5/E)` sin protección; ese radicando vale
 cero exactamente en una órbita circular y el redondeo puede volverlo negativo. La misma
@@ -228,6 +244,36 @@ solo descarta `energy(j) >= 0` (`analysish.f90:147`), así que una partícula li
 contamina el acumulador completo. `initial_data.f90:122` tiene el mismo hueco, enmascarado
 por un `f /= f` que atribuye el NaN a nodos no ligados cuando puede ser una órbita
 circular válida a la que se le pone masa cero en silencio.
+
+**No era un riesgo teórico.** Evaluando los radicandos para 500 órbitas exactamente
+circulares del isócrono, con radios repartidos en [0.5, 5]:
+
+| radicando | negativos por redondeo | mínimo |
+|---|---|---|
+| discriminante 1+2E(2+2E+L²) | **87 de 500** | −4.4e−16 |
+| excentricidad −L²−2E−2−0.5/E | **120 de 500** | −1.8e−15 |
+
+Es decir, una de cada cinco órbitas circulares producía un NaN.
+
+**Corrección.** Todos los radicandos van con `max(...,0)`, la división por s₂−s₁ se
+protege (vale cero exactamente en una órbita circular) y las partículas no ligadas se
+saltan antes de construir el mapa en vez de después. El caso degenerado es inocuo por sí
+mismo: en una órbita circular la acción radial se anula y la función de prueba lleva un
+factor J², así que esa partícula no aporta nada sea cual sea el ángulo que se le dé.
+
+En `initial_data.f90` (estado `aa`) se separan los dos casos que antes tragaba el mismo
+`f /= f`: los nodos no ligados se cuentan y se reportan, y los casi circulares dejan de
+perder su masa en silencio.
+
+Prueba de aceptación: las 500 órbitas circulares de arriba, en una corrida real.
+
+| | h₀ | h₁ … h₄ |
+|---|---|---|
+| antes | 5.04e−39 | **NaN** |
+| después | 5.04e−39 | 2.42e−40, 1.52e−39, 3.24e−41, 1.12e−40 |
+
+h₀ sobrevivía porque no usa el ángulo; a partir de k=1 el factor exp(−ikQ) propagaba el
+NaN a todo el acumulador.
 
 ### 6. Arreglos automáticos de tamaño `Npart` en la pila
 **Estado: PENDIENTE**
@@ -337,14 +383,24 @@ término imagen: una partícula en r < −W_cell·dr tiene su imagen sobre punto
 escanean la celda 1 y su masa desaparecería. Con courant ≤ 0.5 nunca ocurre, pero nada
 lo verifica.
 
-### 19. `eps` es un parámetro de entrada que el código sobrescribe en silencio
-**Estado: PENDIENTE** (hallado al corregir el punto 2)
+### 19. `eps`: código muerto (el enunciado original de este punto era erróneo)
+**Estado: ENUNCIADO CORREGIDO, severidad rebajada** (2026-09-20)
 
-`paramfile.f90` acepta `eps` del archivo de parámetros, y `utils.f90:36` lo fija a cero
-en `set_grid_size`, después de leerlo. Todo el código de suavizado del término centrífugo
-(`den = r**2 + eps*eps` en `grav_force.f90`) es código muerto, y la comprobación
-`eps /= 0` de `main.f90:54` no puede fallar nunca. Está documentado en la declaración
-(`parameters.f90:42`) pero un valor puesto en el `.par` se descarta sin aviso.
+Lo que escribí primero — que `paramfile.f90` acepta `eps` del archivo de parámetros y
+`set_grid_size` lo descarta en silencio — **es falso**. `eps` no está en la lista de
+nombres leíbles de `paramfile.f90`: un `.par` que lo ponga es rechazado con
+"Did you mean Npc?". No hay ningún valor del usuario que se descarte.
+
+Lo que sí queda, y es mucho menor: `eps` vale cero siempre (su valor por omisión en
+`parameters.f90`, reafirmado en `set_grid_size`), de modo que el suavizado del término
+centrífugo `den = r**2 + eps*eps` de `grav_force.f90` y `energy.f90` es código muerto, y
+la comprobación `eps /= 0` de `main.f90:54` no puede fallar nunca. La declaración en
+`parameters.f90:42` ya lo documenta correctamente.
+
+Opciones, ninguna urgente: dejarlo como está (una funcionalidad latente), quitarlo del
+todo (sería neutral bit a bit, porque `r**2 + 0.0*0.0` es exactamente `r**2`), o
+convertirlo en parámetro de verdad, lo que exigiría rehacer los mapas ángulo–acción con
+el potencial suavizado.
 
 ### 20. El código y el artículo de referencia usan convenios de depósito distintos
 **Estado: MEDIDO, decisión pendiente** (hallado al documentar el integrador)

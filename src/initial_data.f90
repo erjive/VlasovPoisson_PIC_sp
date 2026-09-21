@@ -15,7 +15,7 @@
 
     implicit none
 
-    integer :: i,j,k,indx
+    integer :: i,j,k,indx,nunbound
     real(8) :: smallpi,f_max
     real(8) :: raux,paux,laux
     real(8) :: gaussian
@@ -87,9 +87,11 @@
 !     Regular grid in (r,p,L), indexed as in gaussian1, with f evaluated at
 !     the isochrone angle-action variables of each node.
 
+      nunbound = 0
+
       !$OMP PARALLEL DO SCHEDULE(GUIDED) &
       !$OMP PRIVATE(i,j,k,indx,raux,paux,laux,energy,er1,er2,s1,s2,s,argaux,eta,Q3,J3) &
-      !$OMP COLLAPSE(3)
+      !$OMP REDUCTION(+:nunbound) COLLAPSE(3)
       do k=1,Nlc
         do i=1,Nrc
           do j=1,Npc
@@ -105,12 +107,35 @@
             l_part(indx) = laux
 
             energy = -1.0d0/(1.0D0+dsqrt(1.0D0+raux**2)) + 0.5d0*laux**2/(raux**2) + 0.5D0*paux**2
-            er1 = dsqrt((1.d0+energy*(2.d0+laux**2)-dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+laux**2)))/(2.d0*energy**2))
-            er2 = dsqrt((1.d0+energy*(2.d0+laux**2)+dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+laux**2)))/(2.d0*energy**2))
+
+!           An unbound node has no angle-action variables and carries no mass
+!           in this distribution. It used to be caught further down by a NaN
+!           test, which also swallowed the rounding NaN of a near-circular
+!           orbit -- a perfectly valid node that was being given zero mass in
+!           silence. Now the two are separated and the count is reported
+!           (AUDITORIA_2026-09-20.md, point 5).
+
+            if (energy >= 0.0d0) then
+
+              f(indx) = 0.0d0
+              nunbound = nunbound + 1
+
+            else
+
+!           Every radicand is clamped at zero: all of them vanish on a
+!           circular orbit, so rounding alone can turn them negative.
+
+            er1 = dsqrt(max(1.d0+2.d0*energy*(2.d0+2.d0*energy+laux**2),0.0d0))
+            er2 = dsqrt(max((1.d0+energy*(2.d0+laux**2)+er1)/(2.d0*energy**2),0.0d0))
+            er1 = dsqrt(max((1.d0+energy*(2.d0+laux**2)-er1)/(2.d0*energy**2),0.0d0))
             s1 = 1.d0 + sqrt(1.d0+er1**2)
             s2 = 1.d0 + sqrt(1.d0+er2**2)
             s  = 1.d0 + sqrt(1.d0+raux**2)
-            argaux = (s1+s2-2.0d0*s)/(s2-s1)
+            if (s2 > s1) then
+              argaux = (s1+s2-2.0d0*s)/(s2-s1)
+            else
+              argaux = 0.0d0
+            end if
 
             if (paux>=0.d0) then
               eta = dacos(sign(min(abs(argaux),1.0d0),argaux))
@@ -119,19 +144,28 @@
               eta = dacos(-sign(min(abs(argaux),1.0d0),argaux))+smallpi
             end if
 
-            Q3 = eta - sqrt((-2.d0*energy)**3)*sqrt(-laux**2-2.d0*energy-2.d0-0.5D0/energy)/(-2.d0*energy)*sin(eta)
+            Q3 = eta - sqrt((-2.d0*energy)**3) &
+                 *sqrt(max(-laux**2-2.d0*energy-2.d0-0.5D0/energy,0.0d0))/(-2.d0*energy)*sin(eta)
 
             J3 = 1.d0/sqrt(-2.d0*energy)-0.5d0*(laux+sqrt(laux**2+4.d0))
 
             f(indx) = exp(-sin(0.5d0*Q3)**2/sp**2)*exp(-J3**2/sr**2)*J3**2*exp(-(laux-l0)**2/sl**2)
 
-!           Unbound nodes (E >= 0) have no angle-action variables and no
-!           mass in this distribution.
+!           Last resort: with the clamps above no NaN should reach this point.
             if (f(indx) /= f(indx)) f(indx) = 0.D0
+
+            end if
+
           end do
         end do
       end do
       !$OMP END PARALLEL DO
+
+      if (nunbound > 0) then
+        print *
+        print *, 'state="aa": ',nunbound,' of ',Npart,' nodes are unbound (E >= 0)'
+        print *, '            and were given zero mass.'
+      end if
 
       f_max = maxval(f)
 

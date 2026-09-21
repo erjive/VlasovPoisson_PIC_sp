@@ -60,16 +60,42 @@
     ! Constants
     smallpi =  acos(-1.0d0)
 
+! Every radicand of the map is clamped at zero. All of them vanish on a
+! circular orbit -- the discriminant, the two turning points and the
+! eccentricity -- so rounding alone can make them slightly negative, and a
+! single NaN would spread to every h_k through the sum below. It is the
+! protection the other two copies of this map already carry (utils.f90) and
+! that was missing only here (AUDITORIA_2026-09-20.md, point 5).
+!
+! The degenerate case is harmless on its own account: on a circular orbit
+! the radial action vanishes and the test function carries a factor J**2, so
+! such a particle contributes exactly nothing whatever angle it is given.
+!
+! er1 holds the discriminant while it is needed, to avoid one more array of
+! length Npart on the stack.
+
     energy = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part**2)) + 0.5d0*l_part**2/(r_part**2) + 0.5D0*p_part**2
-    er1 = dsqrt((1.d0+energy*(2.d0+l_part**2)-dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+l_part**2)))/(2.d0*energy**2))
-    er2 = dsqrt((1.d0+energy*(2.d0+l_part**2)+dsqrt(1.d0+2.d0*energy*(2.d0+2.d0*energy+l_part**2)))/(2.d0*energy**2))
+    er1 = dsqrt(max(1.d0+2.d0*energy*(2.d0+2.d0*energy+l_part**2),0.0d0))
+    er2 = dsqrt(max((1.d0+energy*(2.d0+l_part**2)+er1)/(2.d0*energy**2),0.0d0))
+    er1 = dsqrt(max((1.d0+energy*(2.d0+l_part**2)-er1)/(2.d0*energy**2),0.0d0))
     s1 = 1.d0 + sqrt(1.d0+er1**2)
     s2 = 1.d0 + sqrt(1.d0+er2**2)
     s  = 1.d0 + sqrt(1.d0+r_part**2)
-    argaux = (s1+s2-2.0d0*s)/(s2-s1)
+    where (s2 > s1)
+      argaux = (s1+s2-2.0d0*s)/(s2-s1)
+    elsewhere
+      argaux = 0.0d0
+    end where
     Jr = 1.d0/sqrt(-2.d0*energy)-0.5d0*(l_part+sqrt(l_part**2+4.d0))
 
     do i=1,Npart
+
+!         Unbound particles have no angle-action variables and are left out
+!         of the sum below, so there is no point in building a NaN for them.
+          if (energy(i) >= 0.d0) then
+            Qr(i) = 0.d0
+            cycle
+          end if
 
           if (p_part(i)>=0.d0) then
             eta = dacos(sign(min(abs(argaux(i)),1.0d0),argaux(i)))
@@ -79,7 +105,8 @@
           end if
 
           Qr(i) = eta - sqrt((-2.d0*energy(i))**3) &
-                  *sqrt(-l_part(i)**2-2.d0*energy(i)-2.d0-0.5D0/energy(i))/(-2.d0*energy(i))*sin(eta)
+                  *sqrt(max(-l_part(i)**2-2.d0*energy(i)-2.d0-0.5D0/energy(i),0.0d0)) &
+                  /(-2.d0*energy(i))*sin(eta)
     end do
     ii = (0.d0,1.d0)
 

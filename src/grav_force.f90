@@ -92,23 +92,23 @@ subroutine grav_force
        !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(den)
        do i=1,Npart
          den = r_part(i)**2 + eps*eps
-         pot_part(i)   = pot_part(i) + (-1.0D0/r_part(i))
-         force_part(i) = force_part(i) + (-1.0D0/r_part(i)**2)
+         pot_part(i)   = pot_part(i) + (-1.0D0/abs(r_part(i)))
+         force_part(i) = force_part(i) + (-sign(1.0D0,r_part(i))/r_part(i)**2)
          pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
          force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
        end do
        !$OMP END PARALLEL DO
 
-       pot = pot + (-1.0D0/r)
-       force = force + (-1.0D0/r**2)
+       pot = pot + (-1.0D0/abs(r))
+       force = force + (-sign(1.0D0,r)/r**2)
 
      else
 
        !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(den)
        do i=1,Npart
          den = r_part(i)**2 + eps*eps
-         pot_part(i)   = (-1.0D0/r_part(i))
-         force_part(i) = (-1.0D0/r_part(i)**2)
+         pot_part(i)   = (-1.0D0/abs(r_part(i)))
+         force_part(i) = (-sign(1.0D0,r_part(i))/r_part(i)**2)
          pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
          force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
        end do
@@ -168,27 +168,39 @@ contains
 
   end subroutine add_background
 
+! The closed forms are evaluated at |r|, and the force carries the sign of r.
+! A particle may step to r < 0 inside a time step (main.f90 reflects it only
+! afterwards) and the grid has ghost points at negative radii, so the
+! background has to be even in r and its force odd. Written in terms of r
+! itself, "nfw" and "burkert" are neither (nfw even reverses the sign of the
+! force, pushing a particle that crosses the origin further out), "sphere"
+! takes its inner branch for every r < 1 including r < -1, and "iso" is not
+! defined at all for r < 0 (AUDITORIA_2026-09-20.md, point 4).
+
   elemental real(8) function bgpot(x)
 
     real(8), intent(in) :: x
+    real(8) :: a
+
+    a = abs(x)
 
     select case (BGtype)
     case ("sphere")
 !      Constant density star of mass 1 and radius 1.
-       if (x<1.d0) then
-          bgpot = 0.5d0*(x**2 - 3.d0)
+       if (a<1.d0) then
+          bgpot = 0.5d0*(a**2 - 3.d0)
        else
-          bgpot = - 1.d0/x
+          bgpot = - 1.d0/a
        end if
     case ("iso")
-       bgpot = 3.0d0*log(x)
+       bgpot = 3.0d0*log(a)
     case ("isotrun")
-       bgpot = (10.0d0/6.0d0)*( 2.0d0*atan(x)/x + log(x**2+1) )
+       bgpot = (10.0d0/6.0d0)*( 2.0d0*atan(a)/a + log(a**2+1) )
     case ("nfw")
-       bgpot = -16.0d0*log( 1.0d0+x )/x
+       bgpot = -16.0d0*log( 1.0d0+a )/a
     case ("burkert")
-       bgpot = ( 10.0d0/(3.0d0*x) )*( 2.0d0*(1.0d0+x)*atan(x) -2.0d0*(1.0d0+x)*log(1.0d0+x) &
-               -(1.0d0-x)*log(1.0d0+x**2) )
+       bgpot = ( 10.0d0/(3.0d0*a) )*( 2.0d0*(1.0d0+a)*atan(a) -2.0d0*(1.0d0+a)*log(1.0d0+a) &
+               -(1.0d0-a)*log(1.0d0+a**2) )
     case default
        bgpot = 0.0d0
     end select
@@ -198,25 +210,32 @@ contains
   elemental real(8) function bgforce(x)
 
     real(8), intent(in) :: x
+    real(8) :: a
+
+    a = abs(x)
 
     select case (BGtype)
     case ("sphere")
-       if (x<1.d0) then
-          bgforce = - x
+       if (a<1.d0) then
+          bgforce = - a
        else
-          bgforce = - 1.d0/x**2
+          bgforce = - 1.d0/a**2
        end if
     case ("iso")
-       bgforce = -3.0d0/x
+       bgforce = -3.0d0/a
     case ("isotrun")
-       bgforce = -(10.0d0/3.0d0)*( x-atan(x) )/x**2
+       bgforce = -(10.0d0/3.0d0)*( a-atan(a) )/a**2
     case ("nfw")
-       bgforce = -16.0d0*( log(1.0d0+x)-x/(1.0d0+x) )/x**2
+       bgforce = -16.0d0*( log(1.0d0+a)-a/(1.0d0+a) )/a**2
     case ("burkert")
-       bgforce = -( 10.0d0/(3.0d0*x*x) )*( log( (1.0d0+x**2)*(1.0d0+x)**2 ) - 2.0d0*atan(x) )
+       bgforce = -( 10.0d0/(3.0d0*a*a) )*( log( (1.0d0+a**2)*(1.0d0+a)**2 ) - 2.0d0*atan(a) )
     case default
        bgforce = 0.0d0
     end select
+
+!   Odd extension to r < 0.
+
+    if (x < 0.0d0) bgforce = - bgforce
 
   end function bgforce
 
