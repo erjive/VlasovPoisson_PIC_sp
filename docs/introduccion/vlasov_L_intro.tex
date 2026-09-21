@@ -531,11 +531,14 @@ $F$ se representa con macropartículas $(r,p_r,L,f)$. En cada evaluación de fue
     \end{equation}
     cerca del origen se suma también la imagen de cada partícula en $-r_j$, la simetría
     $f(r,p)=f(-r,-p)$;
-  \item se integra Poisson, $\dd\Phi/\dd r=M(r)/r^2$, con Runge--Kutta de segundo orden
-    desde el centro, y se ajusta la constante para que $\Phi+r\Phi'\to0$ en el borde;
-  \item se interpolan potencial y fuerza a cada partícula con el mismo $W_n$ (así no hay
-    autofuerza), usando los nodos espejo para $r<\Delta r$ y la solución kepleriana más
-    allá del último nodo, y se suman el fondo y el término centrífugo $L^2/r^3$;
+  \item se integra Poisson hacia afuera en la forma $\dd M/\dd r=4\pi r^2\rho$,
+    $\dd\Phi/\dd r=M(r)/r^2$, con la densidad reconstruida como una recta entre nodos y
+    ambas integrales en forma cerrada (\S\ref{sec:poisson}), y se ajusta la constante
+    para que $\Phi+r\Phi'\to0$ en el borde;
+  \item se interpolan potencial y fuerza a cada partícula con el mismo $W_n$, usando los
+    nodos espejo para $r<\Delta r$ y la solución kepleriana más allá del último nodo; se
+    resta la autofuerza, que en simetría esférica no se cancela sola
+    (\S\ref{sec:autofuerza}), y se suman el fondo y el término centrífugo $L^2/r^3$;
   \item se avanzan las partículas.
 \end{enumerate}
 Referencias clásicas: Birdsall y Langdon~\cite{birdsall2004}, Hockney y
@@ -546,13 +549,241 @@ Eastwood~\cite{hockney1988}.
 uniforme (radio 5, 2000 capas) y partículas de prueba sin masa, la fuerza sobre las
 partículas coincide con $-M(<r)/r^2$ a $6\times10^{-8}$ con $n=2,3$, desde $r=0.01$
 hasta fuera de la malla; ese número es la precisión con que las capas representan la
-esfera. Con una sola capa, la fuerza es nula adentro, $-0.49\,M/R^2$ sobre la capa (el
-límite continuo es $-\tfrac12$) y $-M/r^2$ afuera. Una revisión del código contra estas
+esfera. Con una sola capa, la fuerza es nula adentro y $-M/r^2$ afuera; sobre la capa
+misma valía $-0.49\,M/R^2$, que no es un límite continuo que haya que reproducir sino la
+autofuerza que ahora se resta (\S\ref{sec:autofuerza}). Una revisión del código contra estas
 ecuaciones encontró y corrigió que la interpolación ignoraba los nodos espejo (la fuerza
 salía entre 3.7 y 5 veces la exacta en $r=0.01$), que el volumen $V_i$ era el de otra
 función de peso (densidad uniforme sobrestimada en $1+\Delta r^2/12r^2$) y que las
 partículas fuera de la malla no sentían la masa; el detalle está en
 \texttt{BUGS\_TODO.md}.
+\end{aviso}
+
+\subsection{El integrador radial de Poisson}
+\label{sec:poisson}
+
+El paso~2 de la lista anterior es el único lugar donde hay que resolver una ecuación
+diferencial, y merece detalle: su formulación original tenía un defecto que solo se
+manifiesta con la masa muy concentrada cerca del origen, y que ninguna de las pruebas
+de verificación habituales puede ver.
+
+\paragraph{Lo que había.} El código integraba directamente el par
+\begin{equation}
+  \frac{\dd \Phi}{\dd r}=\Phi',\qquad
+  \frac{\dd \Phi'}{\dd r}=-\frac{2}{r}\,\Phi'+4\pi\rho ,
+  \label{eq:poisson_ode}
+\end{equation}
+con Runge--Kutta de segundo orden desde el primer nodo $r_1=\Delta r/2$, arrancando con
+la solución de densidad constante en $[0,r_1]$,
+\begin{equation}
+  \Phi(r_1)=\tfrac23\pi\rho_1r_1^2,\qquad \Phi'(r_1)=\tfrac43\pi\rho_1r_1 .
+  \label{eq:arranque}
+\end{equation}
+
+\paragraph{Por qué falla.} El término $-2\Phi'/r$ es singular en el origen, y con una
+fuente concentrada en la primera celda el esquema de segundo orden no lo resuelve: lo
+cancela. Tómese una sola partícula de masa $m$ situada exactamente sobre $r_1$, con el
+peso lineal $n=1$. Solo la celda~1 recibe masa, y como
+$r_1^2+\tfrac16\Delta r^2=\tfrac{5}{12}\Delta r^2$,
+\begin{equation}
+  \rho_1=\frac{m}{4\pi\Delta r\left(r_1^2+\frac{1}{6}\Delta r^2\right)}
+        =\frac{3m}{5\pi\Delta r^{3}},\qquad
+  \Phi'(r_1)=\tfrac43\pi\rho_1r_1=\frac{2}{5}\frac{m}{\Delta r^{2}} .
+\end{equation}
+La fuente en el nodo izquierdo vale
+\begin{equation}
+  -\frac{2}{r_1}\Phi'(r_1)+4\pi\rho_1
+  =-\frac{8}{5}\frac{m}{\Delta r^{3}}+\frac{12}{5}\frac{m}{\Delta r^{3}}
+  =\frac{4}{5}\frac{m}{\Delta r^{3}},
+\end{equation}
+de donde el valor intermedio es
+$\Phi'_{1/2}=\Phi'(r_1)+\tfrac12\Delta r\cdot\tfrac45 m/\Delta r^3
+=\tfrac45\,m/\Delta r^{2}$, y la fuente en el punto medio,
+\begin{equation}
+  -\frac{4\Phi'_{1/2}}{r_1+r_2}+2\pi(\rho_1+\rho_2)
+  =-\frac{8}{5}\frac{m}{\Delta r^{3}}+\frac{6}{5}\frac{m}{\Delta r^{3}}
+  =-\frac{2}{5}\frac{m}{\Delta r^{3}} .
+\end{equation}
+El paso completo da entonces
+\begin{equation}
+  \Phi'(r_2)=\Phi'(r_1)+\Delta r\left(-\frac{2}{5}\frac{m}{\Delta r^{3}}\right)
+  =\frac{2}{5}\frac{m}{\Delta r^{2}}-\frac{2}{5}\frac{m}{\Delta r^{2}}=0 ,
+\end{equation}
+y como más allá no hay fuente, $\Phi'$ se queda en cero en toda la malla:
+\textbf{esa partícula no genera campo alguno}. No es una pérdida de precisión, es una
+pérdida de masa del 100\,\%.
+
+El efecto no se limita al primer nodo. La columna ``antes'' de la
+tabla~\ref{tab:masapoisson} da la masa que el campo registra,
+$M=-F(r_{N})\,r_{N}^{2}$, para una sola partícula de masa~1 colocada a distintos radios.
+
+\paragraph{El esquema nuevo.} Se integra la masa encerrada en vez de $\Phi'$:
+\begin{equation}
+  \frac{\dd M}{\dd r}=4\pi r^{2}\rho ,\qquad
+  \frac{\dd \Phi}{\dd r}=\frac{M}{r^{2}} .
+  \label{eq:poisson_masa}
+\end{equation}
+El término $2/r$ desaparece, y con él la única fuente de rigidez en el origen. Entre dos
+nodos la densidad se reconstruye como la recta que une sus dos valores,
+\begin{equation}
+  \rho(x)=\rho_{i-1}+s\,(x-r_{i-1}),\qquad s=\frac{\rho_i-\rho_{i-1}}{\Delta r},
+\end{equation}
+de modo que $M$ es un polinomio sin término lineal ni cuadrático,
+\begin{equation}
+  M(x)=c_0+c_3x^{3}+c_4x^{4},\qquad
+  c_3=\frac{4\pi}{3}\big(\rho_{i-1}-s\,r_{i-1}\big),\qquad
+  c_4=\pi s ,
+\end{equation}
+con $c_0$ fijado por $M(r_{i-1})$, y las dos integrales se hacen en forma cerrada:
+\begin{equation}
+  \int \frac{M(x)}{x^{2}}\,\dd x=-\frac{c_0}{x}+\frac{c_3}{2}x^{2}+\frac{c_4}{3}x^{3} .
+\end{equation}
+No hay error de cuadratura dentro del intervalo; la única aproximación es la
+reconstrucción lineal de $\rho$. Escrito como pesos, que es como está en el código,
+\begin{equation}
+  M(r_i)=M(r_{i-1})+A_i\,\rho_{i-1}+B_i\,\rho_i ,\qquad
+  \begin{aligned}
+    A_i&=4\pi\left(I_0-I_1/\Delta r\right),\\
+    B_i&=4\pi I_1/\Delta r,
+  \end{aligned}
+  \label{eq:pesos_masa}
+\end{equation}
+con $I_0=\int_{r_{i-1}}^{r_i} x^{2}\dd x$ e $I_1=\int_{r_{i-1}}^{r_i}x^{2}(x-r_{i-1})\dd x$.
+El primer nodo cubre $[0,r_1]$, donde la densidad es par y por tanto constante, así que
+$M(r_1)=\tfrac43\pi\rho_1r_1^{3}$ y $\Phi(r_1)$ sigue siendo el de~\eqref{eq:arranque};
+lo que cambia es todo lo que viene después.
+
+\paragraph{Dos propiedades.} La primera es que ningún término divide por $r$ cerca del
+origen. La segunda es más fina: para el peso lineal, la recta entre nodos
+\emph{reproduce exactamente} el perfil depositado, porque el sombrero de la CIC es
+justamente una función lineal a trozos. Entonces
+\begin{equation}
+  \int 4\pi r^{2}\rho\,\dd r=\sum_i \rho_i V_i=\sum_j m_j
+\end{equation}
+sin error, y cada partícula aporta toda su masa al campo sea cual sea su radio. Para
+$n\ge2$ la recta ya no es el B-spline y queda un error $O((\Delta r/r)^{2})$ --- del
+mismo orden que antes, pero sin el fallo catastrófico cerca del origen.
+
+\begin{table}[htbp]
+\centering
+\caption{Masa que el campo registra, $M=-F(r_N)r_N^{2}$, para una sola partícula de masa
+$1$ a distintos radios, con $\Delta r=0.01$. Medido en el binario. La columna
+``antes'' es el Runge--Kutta sobre~\eqref{eq:poisson_ode}; la columna ``después'', la
+integración de~\eqref{eq:poisson_masa}.}
+\label{tab:masapoisson}
+\begin{tabular}{ccrr}
+\toprule
+$n$ & $r_j/\Delta r$ & antes & después \\
+\midrule
+1 & 0.5  & $-0.00000000$ & $\mathbf{1.00000000}$ \\
+1 & 1.0  & $0.58341142$  & $\mathbf{1.00000000}$ \\
+1 & 2.0  & $1.09610630$  & $\mathbf{1.00000000}$ \\
+1 & 5.0  & $1.00399376$  & $\mathbf{1.00000000}$ \\
+1 & 20.0 & $1.00020220$  & $\mathbf{1.00000000}$ \\
+\midrule
+2 & 0.5  & $0.14099109$  & $0.85000000$ \\
+2 & 20.0 & $0.99999356$  & $0.99979141$ \\
+3 & 0.5  & $0.18192399$  & $0.75115207$ \\
+3 & 20.0 & $0.99978488$  & $0.99958264$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Qué cambia y qué no.} Con una esfera uniforme de masa~1 y radio~5 (2000 capas,
+$\Delta r=0.05$) el error relativo de la fuerza \emph{dentro} no cambia --- $5.0\times10^{-4}$
+en ambos esquemas, porque ahí manda el sesgo de muestreo de la CIC, no el solver ---
+mientras que \emph{fuera} pasa de $8.9\times10^{-5}$ a $4.3\times10^{-9}$, y la masa total
+registrada de $0.9999937$ a $1.0000000$. En una corrida física con autogravedad
+($a_0=10^{-3}$, 4000 pasos) los resultados se mueven $\sim3\times10^{-7}$. Las corridas
+sin autogravedad no cambian en absoluto: el solver solo se llama cuando
+\texttt{autointeraction} está activa.
+
+\begin{aviso}
+\textsc{por qué las pruebas anteriores no lo vieron.} La batería de verificación usaba
+una esfera de densidad uniforme, que es exactamente la configuración que el esquema
+antiguo integra \emph{sin error}: para $\rho$ constante la solución $\Phi'=\tfrac43\pi\rho r$
+es lineal, el arranque~\eqref{eq:arranque} es exacto y el Runge--Kutta integra una
+derivada constante sin error. La prueba era degenerada respecto de lo que debía probar.
+La lección de método: un caso de prueba que coincide con la hipótesis de diseño del
+esquema no prueba el esquema.
+\end{aviso}
+
+\subsection{La autofuerza}
+\label{sec:autofuerza}
+
+El mismo cambio obligó a revisar una afirmación que el código heredaba de la literatura
+cartesiana: que usar el mismo $W_n$ para depositar e interpolar evita la autofuerza.
+
+Sean $w_i$ los pesos del depósito de una partícula y $K(i',i)$ la fuerza en el nodo $i'$
+producida por masa unidad en el nodo $i$. La fuerza que la partícula se hace a sí misma
+es la forma cuadrática
+\begin{equation}
+  F_{\text{auto}}=m_j\sum_{i',i} w_{i'}\,K(i',i)\,w_i .
+\end{equation}
+En una malla cartesiana el campo de una lámina es $\pm2\pi\sigma$ según el lado, es decir
+$K(i',i)\propto-\operatorname{sgn}(i'-i)$: la matriz es antisimétrica y la forma
+cuadrática se anula idénticamente. Ese es el teorema, y es correcto ahí.
+
+En simetría esférica el teorema de las capas da otro núcleo. Una capa no ejerce fuerza
+hacia adentro y ejerce $-m/r^{2}$ hacia afuera, de modo que
+\begin{equation}
+  K(i',i)=-\frac{H(i'-i)}{r_{i'}^{2}},\qquad H=\tfrac12+\tfrac12\operatorname{sgn} .
+\end{equation}
+La parte $\operatorname{sgn}$ se cancela igual que en el caso cartesiano, pero la parte
+constante $\tfrac12$ sobrevive, y como los pesos suman uno,
+\begin{equation}
+  F_{\text{auto}}=-\frac{m_j}{r_j^{2}}\cdot\frac12\Big(\sum_i w_i\Big)^{2}
+  =-\frac{m_j}{2r_j^{2}} .
+  \label{eq:autofuerza}
+\end{equation}
+Es la autogravedad clásica de una capa. Medida en el esquema, no depende del orden del
+B-spline ni de la posición de la partícula dentro de la celda, tal como
+predice~\eqref{eq:autofuerza}.
+
+\paragraph{Es un artefacto.} En la ecuación de Vlasov la autofuerza es cero
+\emph{exactamente}: cada elemento de fluido tiene masa infinitesimal. El
+$-m_j/(2r_j^{2})$ aparece solo porque la discretización le da masa finita a un elemento
+de muestreo. Tres propiedades lo hacen incómodo: es sistemático y siempre hacia adentro,
+escala como $1/N$ a masa total fija y \emph{no mejora al refinar la malla}, y como
+$m_j\propto f_jL_j$ varía a lo largo del soporte, produce una dispersión espuria de
+frecuencias correlacionada con la posición en $(J,L)$ --- justo la cantidad que mide
+$h_k$.
+
+\paragraph{Por qué no basta restar la forma cerrada.} Con el integrador
+de~\eqref{eq:poisson_masa} la autofuerza discreta se aparta
+de~\eqref{eq:autofuerza} en \emph{primer} orden en $\Delta r/r$, porque es una integral
+sobre el ancho propio de la partícula, y a lo largo de ese ancho varían en
+$O(\Delta r/r)$ tanto la medida $4\pi r^{2}\dd r$ (la mitad exterior del soporte pesa
+más) como el $1/r^{2}$ con que se interpola de vuelta. Midiendo con la partícula en
+$r=1$ y la misma fase dentro de la celda, el cociente
+$\big(1-F/F_{\text{auto}}\big)/(\Delta r/r)$ vale $0.709$, $0.765$, $0.798$, $0.815$,
+$0.824$ para $\Delta r=0.2,\,0.1,\,0.05,\,0.025,\,0.0125$: tiende a $5/6$ con $n=1,2$, y
+a $\approx8/9$ con $n=3$. Restar la forma cerrada dejaría un residuo del $5/6\,(\Delta
+r/r)$ del artefacto --- un 4\,\% con $\Delta r=0.05$ y $r\approx1$ --- que sigue
+escalando como $1/N$.
+
+\paragraph{Lo que hace el código.} Resta la autofuerza \emph{exacta}, sin ninguna
+constante ajustada: reconstruye la densidad propia de la partícula sobre los nodos de su
+soporte con los pesos del depósito, integra su masa encerrada con los mismos pesos
+$A_i,B_i$ de~\eqref{eq:pesos_masa} que usa el solver, y la interpola de vuelta con el
+mismo $W_n$. La imagen en $-r_j$ pertenece a la misma partícula y entra también. Si
+cambian $\Delta r$, el orden del B-spline o el solver, la corrección los sigue sola.
+
+El autopotencial se resta igual, y no es opcional: quitar la fuerza sin quitar la
+autoenergía deja el diagnóstico de energía sin corresponder a la dinámica, y la
+conservación empeora un factor 40 (de $2.5\times10^{-7}$ a $1.1\times10^{-5}$ en la
+corrida de prueba). Con las dos restas queda en $2.1\times10^{-7}$, mejor que el código
+original. Lo que sobrevive es la suma sobre pares con $j\neq k$, que es lo que la
+ecuación de Vlasov pide.
+
+\begin{aviso}
+\textsc{prueba de aceptación, sin parámetros.} Una partícula con $L=1$, $r_0=1$,
+$\rp=0$, sin fondo y con autogravedad. Sin autofuerza la solución es exactamente
+$r(t)=\sqrt{1+t^{2}}$, el movimiento libre en un plano. En $t=10$ el valor exacto es
+$10.04987562112$; el código daba $10.010672361$ (error relativo $3.9\times10^{-3}$) y
+ahora da $10.049875621$ (error relativo $8\times10^{-12}$, el del integrador temporal).
+Midiendo la fuerza directamente, el residuo de la autofuerza es $\sim10^{-13}$ relativo,
+para cualquier radio y cualquier orden del B-spline.
 \end{aviso}
 
 \subsection{Integradores}
