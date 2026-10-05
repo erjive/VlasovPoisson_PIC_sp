@@ -7,7 +7,7 @@
 # y las corre una detras de otra, nunca dos a la vez. --rapido omite las de
 # integracion (I1, I2), que corren el ejecutable completo (~1 min).
 # Escribe en ${VP_VERIF:-/tmp/vp_verificacion}. Codigo de salida: numero de
-# pruebas que fallan. U7, I3 e I4 son de AUDITORIA_FISICA_2026-09-21.md.
+# pruebas que fallan. U7, U8, I3 e I4 son de AUDITORIA_FISICA_2026-09-21.md.
 set -u
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAIZ="$(dirname "$AQUI")"
@@ -24,7 +24,7 @@ fallos=0
 resumen=()
 anota () { resumen+=("$1"); case "$1" in FALLA*) fallos=$((fallos+1));; esac; }
 
-for t in t_forma t_origen t_poisson_nodal t_poisson_orden t_fondos t_aa t_r0; do
+for t in t_forma t_origen t_poisson_nodal t_poisson_orden t_fondos t_aa t_r0 t_masa; do
   $FC $FL -I"$RAIZ/objs" "$AQUI/src/$t.f90" $OBJS -o "$W/$t" || { anota "FALLA $t (no compila)"; continue; }
 done
 
@@ -42,6 +42,7 @@ echo "== U5";  ./t_fondos | grep -v -E 'Number of|Memory|^ *$' | tee u5.txt;  an
 echo "== U6";  ./t_aa | grep -v -E 'Number of|Memory|^ *$|integrator|particles are|angle-action|Aborting' | tee u6.txt; anota "$(grep -E '^(PASA|FALLA)' u6.txt)"
 
 echo "== U7";  ./t_r0 | grep -v -E 'Number of|Memory|^ *$' | tee u7.txt; anota "$(grep -E '^(PASA|FALLA)' u7.txt)"
+echo "== U8";  ./t_masa | grep -v -E 'Number of|Memory|^ *$' | tee u8.txt; anota "$(grep -E '^(PASA|FALLA)' u8.txt)"
 
 if [ $rapido = 0 ]; then
   echo "== I1";  python3 "$AQUI/py/integradores.py" "$exe" "$W/i1" 2>&1 | grep -v -i warn | tee i1.txt; anota "$(grep -E '^(PASA|FALLA)' i1.txt)"

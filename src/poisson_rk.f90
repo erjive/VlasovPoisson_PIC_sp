@@ -83,6 +83,21 @@
 ! first cell. The Runge-Kutta this file is named after integrated dPhi/dr
 ! directly and lost that mass near the origin: a particle sitting on r(1)
 ! produced no field at all (see AUDITORIA_2026-09-20.md, point 2).
+!
+! For bsplineorder = 2 and 3 the line through avg_rho does not hold exactly
+! the deposited mass: avg_rho divides the mass on point k by the volume its
+! weight covers, 4 pi dr (r_k**2 + (n+1) dr**2/12), and the line weighs it
+! with 4 pi dr (r_k**2 + dr**2/6). A single particle at 2.3 dr gives the
+! field 0.982 (n = 2) and 0.964 (n = 3) of its mass, at 20.3 dr 0.9998 and
+! 0.9996 (test U8). For a smooth density the difference is of second order
+! in dr, like the rest of the scheme. vlasov-poisson_PIC rescales the nodal
+! values by (r_k**2 + (n+1) dr**2/12)/(r_k**2 + dr**2/6) to make the mass
+! exact; that was tried here and left out, because it raises the density at
+! the first points (+20 % and +40 % at r(1)): the force on the grid then
+! converges with order 1 instead of 2 (test U4), and the cold collapse
+! stalls at a relative error of 8e-5 (n = 2) and 1.6e-4 (n = 3) instead of
+! converging as 1/N**2 (1.1e-6 and 1.2e-6 with N = 800)
+! (AUDITORIA_FISICA_2026-09-21.md, section D).
 
 ! First calculate the density
   call avg_density
