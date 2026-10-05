@@ -218,45 +218,93 @@ end subroutine construct_grid
   !! lost (AUDITORIA_FISICA_2026-09-21.md, D2'; test U2).
   subroutine build_cell_list(cell_start,particle_order)
 
+!$  use omp_lib
+
     implicit none
 
     integer, allocatable, intent(out) :: cell_start(:)
     integer, allocatable, intent(out) :: particle_order(:)
 
-    integer :: j,c
-    integer, allocatable :: cell_count(:),cursor(:),ic(:)
+    integer :: j,c,k,th,nth
+    integer, allocatable :: ic(:),local_count(:,:),local_offset(:,:)
     real(8) :: x
 
     allocate(cell_start(1:Nr+1))
     allocate(particle_order(1:Npart))
-    allocate(cell_count(1:Nr))
-    allocate(cursor(1:Nr))
     allocate(ic(1:Npart))
 
-    cell_count = 0
+! Counting sort that groups the particles by cell, in two parallel passes
+! over per-thread histograms. Done serially it was the largest serial part
+! of a self-gravitating run: a fifth of the run time with four threads.
+!
+!   Pass 1: the cell index ic(j) of each particle is computed and tallied
+!   into local_count(:,th), the column of the thread that owns it, so no
+!   atomics are needed.
+!
+!   Between passes (one thread, O(Nr*nth)): the columns are added into
+!   cell_start, and each thread gets its own write offset per cell,
+!   local_offset(c,th) = cell_start(c) + what threads 0..th-1 put in cell c.
+!   This splits the slots of every cell into disjoint per-thread ranges.
+!
+!   Pass 2: each thread writes its own particles into its own ranges.
+!
+! Both loops use SCHEDULE(STATIC) with no chunk size inside the same
+! parallel region, for which OpenMP guarantees the same assignment of
+! iterations to threads, so a particle is written by the thread that counted
+! it. A static schedule gives thread th a contiguous block of particles,
+! in increasing order of th, so within each cell the particles end up in
+! increasing order of j: the same list as the serial sort, whatever the
+! number of threads. The deposit therefore adds them in the same order, and
+! its result does not change by one bit.
+!
+! The histograms are indexed (cell,thread): Fortran is column-major, so each
+! thread owns one contiguous block of Nr elements and the threads do not
+! share cache lines. Same scheme as in vlasov-poisson_PIC, there with one
+! parallel region per pass.
 
+    nth = 1
+!$  nth = omp_get_max_threads()
+    allocate(local_count(1:Nr,0:nth-1))
+    allocate(local_offset(1:Nr,0:nth-1))
+    local_count = 0
+
+    !$OMP PARALLEL PRIVATE(j,c,k,th,x)
+    th = 0
+!$  th = omp_get_thread_num()
+
+    !$OMP DO SCHEDULE(STATIC)
     do j=1,Npart
       x = r_part(j)
       if (ghost > 0) x = abs(x)
       ic(j) = nint((x-r(1))/dr) + 1
       ic(j) = max(1,min(Nr,ic(j)))
-      cell_count(ic(j)) = cell_count(ic(j)) + 1
+      local_count(ic(j),th) = local_count(ic(j),th) + 1
     end do
+    !$OMP END DO
 
+    !$OMP SINGLE
     cell_start(1) = 1
     do c=1,Nr
-      cell_start(c+1) = cell_start(c) + cell_count(c)
+      cell_start(c+1) = cell_start(c) + sum(local_count(c,:))
     end do
+    do c=1,Nr
+      local_offset(c,0) = cell_start(c)
+      do k=1,nth-1
+        local_offset(c,k) = local_offset(c,k-1) + local_count(c,k-1)
+      end do
+    end do
+    !$OMP END SINGLE
 
-    cursor(1:Nr) = cell_start(1:Nr)
-
+    !$OMP DO SCHEDULE(STATIC)
     do j=1,Npart
       c = ic(j)
-      particle_order(cursor(c)) = j
-      cursor(c) = cursor(c) + 1
+      particle_order(local_offset(c,th)) = j
+      local_offset(c,th) = local_offset(c,th) + 1
     end do
+    !$OMP END DO
+    !$OMP END PARALLEL
 
-    deallocate(cell_count,cursor,ic)
+    deallocate(ic,local_count,local_offset)
 
   end subroutine build_cell_list
 
