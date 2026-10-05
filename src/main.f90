@@ -20,21 +20,51 @@ program VP_PIC
 
   integer i,j,k,l       ! Counters
   logical :: sync       ! Does this step need the force at its final positions?
+  integer :: nstage     ! Number of leapfrog sub-steps of the composition
+  real(8) :: wkick(7)   ! Kick weights of the sub-steps (they add up to one)
+  real(8) :: wdrift(8)  ! Drift weights between kicks
 
-! Coefficients of the 4th-order symplectic integrator "yoshida4" (Yoshida,
-! Phys. Lett. A 150, 262 (1990)): three drift-kick sub-steps whose weights
-! cancel the dt^3 local error of a single leapfrog step, leaving a dt^5 local
-! (dt^4 global) error.
+! Symmetric compositions of leapfrog sub-steps of Yoshida, Phys. Lett. A 150,
+! 262 (1990): one step is LF(w_1 dt) LF(w_2 dt) ... LF(w_n dt), with weights
+! that add up to one and cancel the leading error terms of a single leapfrog
+! step. Some weights are negative: those sub-steps run backwards in time.
+!
+! "yoshida4", 4th order, 3 sub-steps: w = (w1, w0, w1).
 
   real(8), parameter :: yg_cbrt2 = 1.2599210498948732d0            ! 2**(1/3)
   real(8), parameter :: yg_w1    = 1.d0/(2.d0-yg_cbrt2)
   real(8), parameter :: yg_w0    = -yg_cbrt2/(2.d0-yg_cbrt2)
-  real(8), parameter :: yg_c1 = yg_w1*0.5d0,      yg_c4 = yg_c1     ! drift weights
-  real(8), parameter :: yg_c2 = (yg_w0+yg_w1)*0.5d0, yg_c3 = yg_c2
-  real(8), parameter :: yg_d1 = yg_w1,  yg_d2 = yg_w0,  yg_d3 = yg_w1 ! kick weights
+
+! "yoshida6", 6th order, 7 sub-steps, solution A of the same paper:
+! w = (a, b, c, z, c, b, a), with z fixed by the sum.
+
+  real(8), parameter :: y6_a =  0.784513610477560d0
+  real(8), parameter :: y6_b =  0.235573213359357d0
+  real(8), parameter :: y6_c = -1.17767998417887d0
+  real(8), parameter :: y6_z =  1.0d0 - 2.0d0*(y6_a+y6_b+y6_c)
 
 
   call read_parameters()
+
+! Each sub-step is drift-kick-drift, and the last half drift of one merges
+! with the first of the next: the drift weights are w_1/2, (w_1+w_2)/2, ...,
+! w_n/2, with one kick of weight w_k between two of them.
+
+  nstage = 0
+  if (integrator == 'yoshida4') then
+     nstage = 3
+     wkick(1:3) = [ yg_w1, yg_w0, yg_w1 ]
+  else if (integrator == 'yoshida6') then
+     nstage = 7
+     wkick(1:7) = [ y6_a, y6_b, y6_c, y6_z, y6_c, y6_b, y6_a ]
+  end if
+  if (nstage > 0) then
+     wdrift(1) = wkick(1)*0.5d0
+     do k=2,nstage
+        wdrift(k) = (wkick(k-1)+wkick(k))*0.5d0
+     end do
+     wdrift(nstage+1) = wkick(nstage)*0.5d0
+  end if
 
   call set_grid_size()
 
@@ -147,16 +177,16 @@ program VP_PIC
 
      t = t + dt
 
-!    yoshida4 and analytic never use the force at the end of a step to move
-!    the particles (the next step starts with a drift), only the potential
-!    and force of the diagnostics written every spatial_output steps, and
-!    set_timestep when dt_switch="var". Skipping that evaluation otherwise
-!    saves one of the four force evaluations per yoshida4 step.
+!    yoshida4, yoshida6 and analytic never use the force at the end of a
+!    step to move the particles (the next step starts with a drift), only the
+!    potential and force of the diagnostics written every spatial_output
+!    steps, and set_timestep when dt_switch="var". Skipping that evaluation
+!    otherwise saves one of the four force evaluations per yoshida4 step.
 
      sync = (mod(l,spatial_output) == 0) .or. (dt_switch == "var")
 
 !    Only euler and leapfrog read the values at the start of the step;
-!    yoshida4 updates in place.
+!    the Yoshida compositions update in place.
 
      if (integrator=='euler' .or. integrator=='leapfrog') then
        r_part_p = r_part
@@ -183,43 +213,36 @@ program VP_PIC
 
        p_part   = p_part_h + force_part*dt*0.5D0
 
-     else if (integrator == 'yoshida4') then
+     else if (integrator == 'yoshida4' .or. integrator == 'yoshida6') then
 
-!      Fourth order symplectic (coefficients above): drift, then three
-!      kick-drift pairs. Each kick is fused with the drift that follows it
-!      into one parallel pass over the particles. Three force evaluations per
-!      step, plus one after the final drift on the steps that need it (sync).
+!      Symplectic composition of nstage leapfrog sub-steps (weights above),
+!      of 4th or 6th order: a drift, then nstage kick-drift pairs. Each kick
+!      is fused with the drift that follows it into one parallel pass over
+!      the particles. nstage force evaluations per step, plus one after the
+!      final drift on the steps that need it (sync).
+!
+!      A higher order is not cheaper by itself: yoshida6 takes 7 force
+!      evaluations per step against 3, so it only pays when the error asked
+!      for is very small.
 
        !$OMP PARALLEL DO SCHEDULE(STATIC)
        do i=1,Npart
-         r_part(i) = r_part(i) + yg_c1*dt*p_part(i)
+         r_part(i) = r_part(i) + wdrift(1)*dt*p_part(i)
        end do
        !$OMP END PARALLEL DO
        call grav_force()
 
-       !$OMP PARALLEL DO SCHEDULE(STATIC)
-       do i=1,Npart
-         p_part(i) = p_part(i) + yg_d1*dt*force_part(i)
-         r_part(i) = r_part(i) + yg_c2*dt*p_part(i)
-       end do
-       !$OMP END PARALLEL DO
-       call grav_force()
+       do k=1,nstage
 
-       !$OMP PARALLEL DO SCHEDULE(STATIC)
-       do i=1,Npart
-         p_part(i) = p_part(i) + yg_d2*dt*force_part(i)
-         r_part(i) = r_part(i) + yg_c3*dt*p_part(i)
-       end do
-       !$OMP END PARALLEL DO
-       call grav_force()
+         !$OMP PARALLEL DO SCHEDULE(STATIC)
+         do i=1,Npart
+           p_part(i) = p_part(i) + wkick(k)*dt*force_part(i)
+           r_part(i) = r_part(i) + wdrift(k+1)*dt*p_part(i)
+         end do
+         !$OMP END PARALLEL DO
+         if (k < nstage .or. sync) call grav_force()
 
-       !$OMP PARALLEL DO SCHEDULE(STATIC)
-       do i=1,Npart
-         p_part(i) = p_part(i) + yg_d3*dt*force_part(i)
-         r_part(i) = r_part(i) + yg_c4*dt*p_part(i)
        end do
-       !$OMP END PARALLEL DO
-       if (sync) call grav_force()
 
      else if (integrator == 'analytic') then
 

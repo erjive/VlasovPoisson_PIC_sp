@@ -382,7 +382,7 @@ module paramfile
 
     call check_option(output_format,'output_format','ascii hdf5')
     call check_option(state,'state','gaussian1 aa aa_quad checkpoint')
-    call check_option(integrator,'integrator','euler leapfrog yoshida4 analytic')
+    call check_option(integrator,'integrator','euler leapfrog yoshida4 yoshida6 analytic')
     call check_option(dt_switch,'dt_switch','fix var')
     call check_option(BGtype,'BGtype','null sphere Isochrone Central iso isotrun nfw burkert')
 

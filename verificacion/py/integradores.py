@@ -1,7 +1,10 @@
-# I1. Orden de convergencia en dt de euler, leapfrog y yoshida4 frente al
-# integrador "analytic" (exacto) en el isocrono sin autogravedad.
+# I1. Orden de convergencia en dt de euler, leapfrog, yoshida4 y yoshida6
+# frente al integrador "analytic" (exacto) en el isocrono sin autogravedad.
+# El paso se fija con pmax (dt = courant dr/pmax) y se comprueba que el codigo
+# lo uso: la cota del pericentro de set_timestep lo reduciria si las orbitas
+# de la muestra pasaran mas cerca del centro.
 # Uso: integradores.py <VP_PIC> <dir_trabajo>
-import numpy as np, h5py, subprocess, sys, os
+import numpy as np, h5py, subprocess, sys, os, re
 exe, wd = sys.argv[1], sys.argv[2]
 os.makedirs(wd, exist_ok=True); os.chdir(wd)
 rng = np.random.default_rng(1); rows = []
@@ -44,10 +47,13 @@ directory = {d}
 def corre(integ, dt):
     nt = round(20/dt); d = '%s_%g' % (integ, dt)
     open(d+'.par', 'w').write(plantilla.format(pm=0.5/dt, nt=nt, so=nt//20, integ=integ, d=d))
-    subprocess.run([exe, d+'.par'], stdout=open(d+'.log', 'w'), stderr=subprocess.STDOUT, check=True)
+    out = subprocess.run([exe, d+'.par'], capture_output=True, text=True, check=True).stdout
+    open(d+'.log', 'w').write(out)
+    dtc = float(re.search(r'Time step fixed at size:\s*(\S+)', out).group(1))
+    assert abs(dtc-dt) < 1e-12*dt, 'el codigo no uso el paso pedido'
     return h5py.File(d+'/vlasov_output.h5', 'r')
 def ultimo(h): return h[sorted(k for k in h if k.startswith('step_'))[-1]]
-dts = [0.05, 0.025, 0.0125]; esperado = {'euler': 1, 'leapfrog': 2, 'yoshida4': 4}
+dts = [0.05, 0.025, 0.0125]; esperado = {'euler': 1, 'leapfrog': 2, 'yoshida4': 4, 'yoshida6': 6}
 ok = True
 for integ in esperado:
     err = []

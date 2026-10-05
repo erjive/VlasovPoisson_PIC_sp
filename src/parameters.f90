@@ -79,7 +79,7 @@ module parameters
 
    !Methods
    integer        :: bsplineorder = 1     !< B-spline order
-   character(20)  :: integrator = "euler"   !< Time integrator (euler,leapfrog,yoshida4,analytic)
+   character(20)  :: integrator = "euler"   !< Time integrator (euler,leapfrog,yoshida4,yoshida6,analytic)
    character(20)  :: BGtype = "sphere"    !< Type of background. When the gravitational force is fix (sphere,iso,isotrun,nfw,burkert)
    logical        :: autointeraction = .false. !< Self interaction of particles
    !Energy variables
