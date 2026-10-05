@@ -601,8 +601,8 @@ end subroutine construct_grid
   !> Save all the data to the corresponding files
   !> Time series (energies, potential and force at the centre), written every
   !! spatial_output steps, when they are computed, independently of the
-  !! snapshot cadence field_output (ASCII output; HDF5 keeps them as
-  !! attributes of each snapshot).
+  !! snapshot cadence field_output (ASCII output; HDF5 and raw keep them
+  !! with each snapshot).
   subroutine save_series
 
     character(100) :: filename

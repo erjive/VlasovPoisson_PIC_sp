@@ -15,6 +15,7 @@ program VP_PIC
   use arrays
   use utils
   use hdf5_io
+  use raw_io
 
   implicit none
 
@@ -116,6 +117,7 @@ program VP_PIC
   call dump_parameters()
 
   if (output_format=="hdf5") call open_hdf5_file()
+  if (output_format=="raw")  call open_raw_file()
 
   t = 0.0d0
 
@@ -163,6 +165,8 @@ program VP_PIC
 
   if (output_format=="hdf5") then
      call save_data_hdf5(0)
+  else if (output_format=="raw") then
+     call save_data_raw(0)
   else
      call save_data()
      call save_series()
@@ -299,6 +303,8 @@ program VP_PIC
 
        if (output_format=="hdf5") then
           call save_data_hdf5(l)
+       else if (output_format=="raw") then
+          call save_data_raw(l)
        else
           call save_data()
        end if
@@ -307,7 +313,7 @@ program VP_PIC
 
      if (mod(l,spatial_output).eq.0) then
         call analysish
-        if (output_format/="hdf5") call save_series()
+        if (output_format=="ascii") call save_series()
      end if
 
 !    Discard particles beyond rmax. The arrays are resized, so the force on
@@ -348,6 +354,7 @@ program VP_PIC
   print *
 
   if (output_format=="hdf5") call close_hdf5_file()
+  if (output_format=="raw")  call close_raw_file()
 
   call deallocate_mem()
 

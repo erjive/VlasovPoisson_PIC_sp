@@ -27,6 +27,15 @@ cada `spatial_output` pasos: `hk1.tl`/`hk2.tl` (t, |h_0| … |h_4|) y
 partículas y campos se escriben cada `field_output` pasos (múltiplo de
 `spatial_output`; por omisión, igual).
 
+## Formatos de salida
+
+`output_format` elige cómo se guardan las instantáneas: `ascii` (un archivo de texto por
+cantidad), `hdf5` (`vlasov_output.h5`, un grupo por instantánea) o `raw`
+(`vlasov_output.raw`, binario sin descripción; su formato está en `src/raw_io.f90`). Los
+dos últimos guardan lo mismo. `raw` conviene cuando se guardan muchas instantáneas de
+muchas partículas: con 128 000 partículas y 21 instantáneas la corrida tarda 0.8 s en vez
+de 3.0 s, y el archivo ocupa 86 MB en vez de 55 MB (HDF5 comprime).
+
 ## Herramientas (`tools/`)
 
 | herramienta | para qué |
@@ -37,6 +46,7 @@ partículas y campos se escriben cada `field_output` pasos (múltiplo de
 | `hk_numerico.py` | h_k en las variables verdaderas desde instantáneas HDF5 (necesario con autogravedad) |
 | `equilibrio_L.py` | equilibrio autoconsistente F(J,L) y condición inicial para `state=checkpoint` |
 | `delta_phi.py` | δΦ(r,t) desde HDF5, con resta opcional de una corrida de referencia |
+| `raw_io.py` | lee la salida binaria (`output_format = raw`) y la convierte a HDF5 |
 
 Requieren Python 3 con `numpy` (y `h5py` las que leen HDF5).
 

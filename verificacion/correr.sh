@@ -5,7 +5,7 @@
 #
 # Compila las pruebas unitarias contra objs/ (hace falta haber corrido make)
 # y las corre una detras de otra, nunca dos a la vez. --rapido omite las de
-# integracion (I1, I2), que corren el ejecutable completo (~1 min).
+# integracion (I1 a I5), que corren el ejecutable completo (~10 s).
 # Escribe en ${VP_VERIF:-/tmp/vp_verificacion}. Codigo de salida: numero de
 # pruebas que fallan. U7, U8, I3 e I4 son de AUDITORIA_FISICA_2026-09-21.md.
 set -u
@@ -49,6 +49,7 @@ if [ $rapido = 0 ]; then
   echo "== I2";  python3 "$AQUI/py/colapso.py" "$exe" "$W/i2" 2>&1 | grep -v -i warn | tee i2.txt;     anota "$(grep -E '^(PASA|FALLA)' i2.txt)"
   echo "== I3";  python3 "$AQUI/py/medida.py" "$exe" "$W/i3" 2>&1 | grep -v -i warn | tee i3.txt;      anota "$(grep -E '^(PASA|FALLA)' i3.txt)"
   echo "== I4";  python3 "$AQUI/py/limite_L0.py" "$exe" "$W/i4" 2>&1 | grep -v -i warn | tee i4.txt;   for x in $(grep -n -E '^(PASA|FALLA)' i4.txt | cut -d: -f1); do anota "$(sed -n ${x}p i4.txt)"; done
+  echo "== I5";  python3 "$AQUI/py/salida_raw.py" "$exe" "$W/i5" 2>&1 | grep -v -i warn | tee i5.txt;   anota "$(grep -E '^(PASA|FALLA)' i5.txt)"
 fi
 
 echo; echo "===== Resumen ($exe)"
