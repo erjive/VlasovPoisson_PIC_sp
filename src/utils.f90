@@ -187,9 +187,18 @@ end subroutine construct_grid
   !! are allocated here; the caller must deallocate them.
   !!
   !! The grid is uniform, r(k) = r(1) + (k-1)*dr, so the nearest grid index
-  !! to a position x is nint((x-r(1))/dr) + 1. Particles beyond either end of
-  !! the grid (including negative radii within a time step) are filed in the
-  !! end cell; the deposit still applies the exact support of the weight.
+  !! to a position x is nint((x-r(1))/dr) + 1. Particles beyond the end of
+  !! the grid are filed in the last cell; the deposit still applies the exact
+  !! support of the weight.
+  !!
+  !! With rmin = 0 a particle is filed by |r|. Inside a time step it may be
+  !! at r < 0 (main.f90 reflects it only afterwards), and the deposit adds
+  !! its image at -r: the two together are the same as a particle at |r| and
+  !! its image, and every grid point that either of them reaches is within
+  !! the support of the weight of |r|. Filed by r, such a particle went to
+  !! the first cell, and from r <= -1.5 dr on part of the weight of its image
+  !! fell on points that do not scan that cell: up to all of its mass was
+  !! lost (AUDITORIA_FISICA_2026-09-21.md, D2'; test U2).
   subroutine build_cell_list(cell_start,particle_order)
 
     implicit none
@@ -199,6 +208,7 @@ end subroutine construct_grid
 
     integer :: j,c
     integer, allocatable :: cell_count(:),cursor(:),ic(:)
+    real(8) :: x
 
     allocate(cell_start(1:Nr+1))
     allocate(particle_order(1:Npart))
@@ -209,7 +219,9 @@ end subroutine construct_grid
     cell_count = 0
 
     do j=1,Npart
-      ic(j) = nint((r_part(j)-r(1))/dr) + 1
+      x = r_part(j)
+      if (ghost > 0) x = abs(x)
+      ic(j) = nint((x-r(1))/dr) + 1
       ic(j) = max(1,min(Nr,ic(j)))
       cell_count(ic(j)) = cell_count(ic(j)) + 1
     end do

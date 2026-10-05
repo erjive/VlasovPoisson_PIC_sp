@@ -121,11 +121,11 @@ subroutine deposit(want_curr)
 
   call build_cell_list(cell_start,particle_order)
 
-! W_n vanishes for |y| >= (n+1)/2. A particle is filed in the cell of its
-! nearest grid point, so the particles that give grid point i a nonzero
-! weight lie in cells i-Wcell..i+Wcell with Wcell = floor((n+2)/2). An image
-! at -r_j only reaches the first points, whose cell range already includes
-! the cells near the origin where such a particle is filed.
+! W_n vanishes for |y| >= (n+1)/2. A particle is filed in the cell of the
+! grid point nearest to |r_j| (build_cell_list), so the particles that give
+! grid point i a nonzero weight, directly or through their image at -r_j,
+! lie in cells i-Wcell..i+Wcell with Wcell = floor((n+2)/2): a point reached
+! by the particle or by its image is within (n+1)/2 dr of |r_j|.
 
   cutoff_w = 0.5d0*dble(bsplineorder+1)*dr
   Wcell = (bsplineorder+2)/2
