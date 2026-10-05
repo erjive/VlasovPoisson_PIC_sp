@@ -52,6 +52,115 @@ module utils
     eps = 0.0D0
   end subroutine set_grid_size
 
+  !> Seed the random number generator (state "aa_random").
+  !!
+  !! gfortran seeds random_number from the operating system, so two identical
+  !! Monte Carlo runs differ and neither can be repeated. Fixing the seed here
+  !! makes the sampling reproducible; when the input leaves seed=0 one is taken
+  !! from the clock and written back into "seed", so the value that was
+  !! actually used is the one recorded in params_usados.par.
+  subroutine init_rng
+
+    implicit none
+
+    integer :: n,k,cnt
+    integer, allocatable :: s(:)
+
+    if (seed == 0) then
+       call system_clock(cnt)
+       seed = abs(cnt)
+       if (seed == 0) seed = 1
+    end if
+
+!   random_seed wants a whole array of integers. Spreading the single value
+!   over it with an odd stride avoids handing the generator a state of mostly
+!   equal words; the stride itself carries no meaning.
+    call random_seed(size=n)
+    allocate(s(1:n))
+    s = seed + 37*[(k,k=0,n-1)]
+    call random_seed(put=s)
+    deallocate(s)
+
+  end subroutine init_rng
+
+
+  !> Element idx >= 1 of the Halton sequence of the given base (the radical
+  !! inverse of idx), in [0,1). Coprime bases give a low-discrepancy sequence
+  !! in several dimensions.
+  pure real(8) function halton(idx,base) result(h)
+
+    implicit none
+
+    integer, intent(in) :: idx,base
+    real(8) :: w
+    integer :: n
+
+    h = 0.0d0
+    w = 1.0d0/dble(base)
+    n = idx
+    do while (n > 0)
+      h = h + w*dble(mod(n,base))
+      n = n/base
+      w = w/dble(base)
+    end do
+
+  end function halton
+
+
+  !> Angle-action pair (Q,J) of the point (r,p_r) of a particle with angular
+  !! momentum L, in the isochrone of unit mass and scale: the forward map of
+  !! analysish.f90, with every radicand clamped at zero (all of them vanish
+  !! on a circular orbit, so rounding alone can turn them negative). There
+  !! are no angle-action variables for E >= 0: bound is then false, and Q
+  !! and J are set to zero.
+  pure subroutine rp_to_QJ(rv,pv,Lv,Qv,Jv,bound)
+
+    implicit none
+
+    real(8), intent(in)  :: rv,pv,Lv
+    real(8), intent(out) :: Qv,Jv
+    logical, intent(out) :: bound
+
+    real(8) :: en,disc,ra1,ra2,ss,ss1,ss2,aux,eta,smallpi
+
+    smallpi = acos(-1.0d0)
+
+    en = -1.0d0/(1.0D0+dsqrt(1.0D0+rv**2)) + 0.5d0*Lv**2/(rv**2) + 0.5D0*pv**2
+
+    bound = (en < 0.0d0)
+    if (.not. bound) then
+      Qv = 0.0d0
+      Jv = 0.0d0
+      return
+    end if
+
+    disc = dsqrt(max(1.d0+2.d0*en*(2.d0+2.d0*en+Lv**2),0.0d0))
+    ra2  = dsqrt(max((1.d0+en*(2.d0+Lv**2)+disc)/(2.d0*en**2),0.0d0))
+    ra1  = dsqrt(max((1.d0+en*(2.d0+Lv**2)-disc)/(2.d0*en**2),0.0d0))
+    ss1  = 1.d0 + sqrt(1.d0+ra1**2)
+    ss2  = 1.d0 + sqrt(1.d0+ra2**2)
+    ss   = 1.d0 + sqrt(1.d0+rv**2)
+
+    if (ss2 > ss1) then
+      aux = (ss1+ss2-2.0d0*ss)/(ss2-ss1)
+    else
+      aux = 0.0d0
+    end if
+
+    if (pv>=0.d0) then
+      eta = dacos(sign(min(abs(aux),1.0d0),aux))
+    else
+      eta = dacos(-sign(min(abs(aux),1.0d0),aux))+smallpi
+    end if
+
+    Qv = eta - sqrt((-2.d0*en)**3) &
+         *sqrt(max(-Lv**2-2.d0*en-2.d0-0.5D0/en,0.0d0))/(-2.d0*en)*sin(eta)
+
+    Jv = 1.d0/sqrt(-2.d0*en)-0.5d0*(Lv+sqrt(Lv**2+4.d0))
+
+  end subroutine rp_to_QJ
+
+
   !> Allocate all memory
   subroutine alloc_mem_set0
 

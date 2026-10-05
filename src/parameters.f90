@@ -52,7 +52,9 @@ module parameters
     !Parameters for the Initial States
 
 
-   character(10) :: state = "gaussian1"   !< Initial distribution (gaussian1,aa,aa_quad,checkpoint)
+   character(10) :: state = "gaussian1"   !< Initial distribution (gaussian1,aa,aa_halton,aa_quad,aa_random,checkpoint)
+   integer   :: seed = 0                  !< Seed of state aa_random. 0 takes one from the clock and records it
+                                          !< in params_usados.par, so a Monte Carlo run can always be repeated.
 
    !Gaussian distribution
 

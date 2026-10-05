@@ -141,6 +141,46 @@ module distribution
   end function df0
 
 
+!> An upper bound of F0 over Q in [0,2pi), J >= 0 and L in [lminc,lmaxc],
+!! for the rejection sampling of state "aa_random". It has to be a true
+!! bound, or the sampling is biased; the closer to the maximum, the fewer
+!! draws are rejected. The factor in L is at most one.
+
+  function df0_max() result(Fmax0)
+
+    implicit none
+
+    real(8) :: Fmax0
+
+    select case (dftype)
+
+    case ('gauss')
+!      Exact maximum of the (Q,J) profile: at Q=0 and J=sr.
+       Fmax0 = exp(-1.0d0)*sr**2
+
+    case ('bimodal')
+!      Each factor bounded separately: the angular part by the sum of the
+!      magnitudes of its harmonics, and the two gaussians in J by their peaks.
+       Fmax0 = (1.0d0 + abs(bim_b1) + abs(bim_b2))*(1.0d0 + abs(bim_wb))
+
+    case ('spiral')
+!      Both factors are exponentials of a non-positive number.
+       Fmax0 = 1.0d0
+
+    case ('king')
+!      E(J,L) grows with J and with L, so f_eq peaks at J=0 and at the
+!      smallest L of the box; the angular factor is bounded by 1+|eps|.
+       Fmax0 = king_feq(0.0d0,lminc)*(1.0d0 + abs(kin_eps))
+
+    case default
+       Fmax0 = 0.0d0
+       call df0_unknown
+
+    end select
+
+  end function df0_max
+
+
   subroutine df0_unknown
 
     implicit none

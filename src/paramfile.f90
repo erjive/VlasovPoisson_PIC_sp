@@ -38,7 +38,7 @@ module paramfile
       'time_output', 'spatial_output', 'field_output',           &
       'directory', 'output_format',                              &
       'a0', 'r0', 'p0', 'l0', 'sr', 'sp', 'sl', 'state', 'cutoff', &
-      'checkpointfile', 'dftype',                                &
+      'checkpointfile', 'dftype', 'seed',                        &
       'r1', 'r2',                                                &
       'j1', 'sj1', 'sq1', 'lt1', 'slt1',                         &
       'j2', 'sj2', 'sq2', 'lt2', 'slt2',                         &
@@ -214,6 +214,7 @@ module paramfile
     case ('cutoff')          ; call get_real(value,cutoff,name,origin)
     case ('checkpointfile')  ; call get_str (value,CheckPointfile,name,origin)
     case ('dftype')          ; call get_str (value,dftype,name,origin)
+    case ('seed')            ; call get_int (value,seed,name,origin)
 
 !   Radial window of the averaged density.
     case ('r1')              ; call get_real(value,r1,name,origin)
@@ -381,7 +382,7 @@ module paramfile
     real(8) :: djunk
 
     call check_option(output_format,'output_format','ascii hdf5 raw')
-    call check_option(state,'state','gaussian1 aa aa_quad checkpoint')
+    call check_option(state,'state','gaussian1 aa aa_halton aa_quad aa_random checkpoint')
     call check_option(integrator,'integrator','euler leapfrog yoshida4 yoshida6 analytic')
     call check_option(dt_switch,'dt_switch','fix var')
     call check_option(BGtype,'BGtype','null sphere Isochrone Central iso isotrun nfw burkert')
@@ -400,6 +401,7 @@ module paramfile
     if (jmaxc <= 0.0d0) call df0_Jrange(djunk,jmaxc)
     if (jminc < 0.0d0)  call fail('jminc must be greater than or equal to zero.')
     if (jmaxc <= jminc) call fail('jmaxc must be greater than jminc.')
+    if (seed < 0)       call fail('seed must be greater than or equal to zero.')
     if (dr <= 0.0d0)    call fail('dr must be positive.')
     if (Nrc <= 0 .or. Npc <= 0 .or. Nlc <= 0) call fail('Nrc, Npc and Nlc must be positive.')
     if (courant <= 0.0d0) call fail('courant must be positive.')
@@ -615,6 +617,7 @@ module paramfile
     call put_r(u,'cutoff',cutoff)
     call put_s(u,'checkpointfile',CheckPointfile)
     call put_s(u,'dftype',dftype)
+    call put_i(u,'seed',seed)
 
     write(u,'(a)') ''
     write(u,'(a)') '# Radial window of the averaged density'
