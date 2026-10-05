@@ -130,6 +130,10 @@
     !$OMP DO SCHEDULE(STATIC)
     do j=1,Npart
 
+!     A particle with L = 0 has zero weight (f L) and is skipped: at r = 0
+!     its centrifugal term is 0/0, and the NaN would reach every h_k.
+      if (l_part(j) == 0.0d0) cycle
+
       en = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part(j)**2)) + 0.5d0*l_part(j)**2/(r_part(j)**2) &
            + 0.5D0*p_part(j)**2
 

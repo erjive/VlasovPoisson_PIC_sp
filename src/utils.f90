@@ -1053,7 +1053,12 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
     !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(en,disc,er1,er2,s1,s2,ss,argaux,eta) REDUCTION(+:nunbound)
     do i=1,Npart
-      en = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part(i)**2)) + 0.5d0*l_part(i)**2/(r_part(i)**2) + 0.5D0*p_part(i)**2
+!     For L = 0 the centrifugal term vanishes; written out it is 0/0 at r = 0.
+      if (l_part(i) /= 0.0d0) then
+        en = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part(i)**2)) + 0.5d0*l_part(i)**2/(r_part(i)**2) + 0.5D0*p_part(i)**2
+      else
+        en = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part(i)**2)) + 0.5D0*p_part(i)**2
+      end if
       if (en >= 0.0d0) then
         nunbound = nunbound + 1
         q0_part(i) = 0.0d0

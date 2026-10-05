@@ -23,6 +23,7 @@ subroutine grav_force
   implicit none
   integer :: i
   real(8) :: sq,den      ! per-particle sqrt(1+r**2) and r**2+eps**2
+  real(8), parameter :: dmin = tiny(1.0d0)
 
 ! Self-gravity: solve the Poisson equation for the current particles.
 
@@ -60,6 +61,19 @@ subroutine grav_force
 ! autointeraction=.true. did not reproduce the run without it, which is
 ! precisely the control this audit leans on (AUDITORIA_2026-09-20.md,
 ! point 15).
+!
+! The denominators of the centrifugal term are bounded below by the smallest
+! normal number. The term vanishes for a particle with L = 0, but written as
+! L**2/(2 r**2) and L**2 r/r**4 it evaluated 0/0 when such a particle sat
+! exactly at r = 0, where the isochrone and the sphere are regular
+! (pot = -1/2 and -3/2, no force); the NaN then reached the total energy and
+! every h_k of the run (AUDITORIA_FISICA_2026-09-21.md, N2; test U7). With
+! the bound it is 0/dmin = 0, and nothing changes for r**4 above 2.2e-308.
+! A particle with L > 0 exactly at r = 0, which the dynamics cannot reach,
+! gets a huge potential and no centrifugal force instead of NaN.
+! A test on L inside these loops, with "if" or with "merge", was tried
+! first: the loops stop being vectorized and a run without self-gravity
+! takes 1.7 times as long.
 
   if (BGtype == "Isochrone") then
 
@@ -71,8 +85,8 @@ subroutine grav_force
          den = r_part(i)**2 + eps*eps
          pot_part(i)   = pot_part(i) + (-1.0D0/(1.0D0+sq))
          force_part(i) = force_part(i) + (-r_part(i)/(sq*(1.D0+sq)**2))
-         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
-         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/max(den,dmin)
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/max(den**2,dmin)
        end do
        !$OMP END PARALLEL DO
 
@@ -87,8 +101,8 @@ subroutine grav_force
          den = r_part(i)**2 + eps*eps
          pot_part(i)   = (-1.0D0/(1.0D0+sq))
          force_part(i) = (-r_part(i)/(sq*(1.D0+sq)**2))
-         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
-         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/max(den,dmin)
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/max(den**2,dmin)
        end do
        !$OMP END PARALLEL DO
 
@@ -103,8 +117,8 @@ subroutine grav_force
          den = r_part(i)**2 + eps*eps
          pot_part(i)   = pot_part(i) + (-1.0D0/abs(r_part(i)))
          force_part(i) = force_part(i) + (-sign(1.0D0,r_part(i))/r_part(i)**2)
-         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
-         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/max(den,dmin)
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/max(den**2,dmin)
        end do
        !$OMP END PARALLEL DO
 
@@ -118,8 +132,8 @@ subroutine grav_force
          den = r_part(i)**2 + eps*eps
          pot_part(i)   = (-1.0D0/abs(r_part(i)))
          force_part(i) = (-sign(1.0D0,r_part(i))/r_part(i)**2)
-         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
-         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+         pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/max(den,dmin)
+         force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/max(den**2,dmin)
        end do
        !$OMP END PARALLEL DO
 
@@ -149,8 +163,8 @@ subroutine grav_force
      !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(den)
      do i=1,Npart
        den = r_part(i)**2 + eps*eps
-       pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/den
-       force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/den**2
+       pot_part(i)   = pot_part(i) + 0.5d0*l_part(i)**2/max(den,dmin)
+       force_part(i) = force_part(i) + l_part(i)**2*r_part(i)/max(den**2,dmin)
      end do
      !$OMP END PARALLEL DO
 

@@ -61,6 +61,10 @@ subroutine energy
   le = 0.0D0
   !$OMP DO SCHEDULE(STATIC)
   do i=1,Npart
+!   A particle with L = 0 has no mass (the weight is f L). It is skipped,
+!   because at r = 0 its centrifugal term is 0/0 and the NaN would survive
+!   the product with the zero weight.
+    if (l_part(i) == 0.0d0) cycle
     lk = lk + (0.5D0*p_part(i)**2 + 0.5D0*l_part(i)**2/(r_part(i)**2+eps*eps))*f(i)*l_part(i)
     lp = lp + (pot_part(i) - 0.5D0*potself_part(i) - 0.5D0*l_part(i)**2/(r_part(i)**2+eps*eps))*f(i)*l_part(i)
     le = le + (0.5D0*p_part(i)**2 + pot_part(i) - 0.5D0*potself_part(i))*f(i)*l_part(i)
