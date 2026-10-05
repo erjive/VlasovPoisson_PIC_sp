@@ -686,15 +686,78 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
   end subroutine reduce_arrays
 
 
+  !> Solve the Kepler-like equation Q = eta - ecc*sin(eta) for eta, with
+  !! 0 <= Q < 2 pi and 0 <= ecc <= 1.
+  !!
+  !! First the plain Newton-Raphson from eta = Q that the code always used
+  !! (the same operations, so the same result wherever it worked). It failed
+  !! for ecc >~ 0.98: in 190 of the 10000 cases of test U6, with residuals up
+  !! to 1e25, and it returned a plausible but wrong eta without notice
+  !! (AUDITORIA_CIENTIFICA_2026-09-21.md, D3). So the result is checked,
+  !! without a new evaluation of the residual (the analytic integrator inverts
+  !! every particle at every step): it is accepted if the iteration stopped
+  !! because the residual g at eta_k fell below tol, the last step |g/g'| was
+  !! at most sqrt(tol), so that the residual at eta_k+1 is below about
+  !! |g/g'|**2/2 <= tol/2, and eta lies in [Q - ecc, Q + ecc], where the root
+  !! must be (|eta - Q| = ecc |sin(eta)|). Otherwise the equation is solved
+  !! again with a safeguarded Newton: the left side minus Q grows
+  !! monotonically with eta, the bracket shrinks with the sign of the residual
+  !! at every iterate, and a step that would leave it is replaced by a
+  !! bisection. Same routine as in vlasov-poisson_PIC.
+  elemental real(8) function kepler_eta(Q,ecc,tol) result(eta)
+
+    implicit none
+
+    real(8), intent(in) :: Q,ecc,tol
+
+    real(8) :: g,gp,lo,hi,eta_new
+    integer :: it
+    logical :: ok
+
+    ok  = .false.
+    eta = Q
+    do it=1,50
+      g  = eta - ecc*sin(eta) - Q
+      gp = 1.d0 - ecc*cos(eta)
+      eta = eta - g/gp
+      if (abs(g) < tol) then
+        ok = (abs(g/gp) <= sqrt(tol))
+        exit
+      end if
+    end do
+
+    if (ok .and. eta >= Q - ecc .and. eta <= Q + ecc) return
+
+    lo  = Q - ecc
+    hi  = Q + ecc
+    eta = Q
+    do it=1,200
+      g  = eta - ecc*sin(eta) - Q
+      if (g == 0.0d0) exit
+      if (g < 0.0d0) then
+        lo = max(lo,eta)
+      else
+        hi = min(hi,eta)
+      end if
+      gp = 1.d0 - ecc*cos(eta)
+      eta_new = eta - g/gp
+      if (.not. (eta_new >= lo .and. eta_new <= hi)) eta_new = 0.5d0*(lo+hi)
+      eta = eta_new
+      if (abs(g) < tol .or. hi - lo <= 4.0d0*epsilon(1.0d0)*max(abs(eta),1.0d0)) exit
+    end do
+
+  end function kepler_eta
+
+
   !> Invert the angle-action pair (Q,J) of a particle with angular momentum
   !! L back to (r,p_r), in the isochrone of unit mass and scale.
   !!
   !! J and L fix the energy, E = -1/(2 (J+c)**2) with c = (L+sqrt(L**2+4))/2,
   !! and the energy fixes the turning points. With s = 1+sqrt(1+r**2), the
   !! radial motion is s = (s1+s2)/2 - (s2-s1)/2 cos(eta), and the angle obeys
-  !! the Kepler-like equation Q = eta - ecc sin(eta), solved by Newton-Raphson
-  !! (ecc < 1, so it converges from eta = Q). p_r >= 0 on the way out,
-  !! eta in [0,pi]. This is the inverse of the forward map in analysish.f90.
+  !! the Kepler-like equation Q = eta - ecc sin(eta), solved by kepler_eta.
+  !! p_r >= 0 on the way out, eta in [0,pi]. This is the inverse of the
+  !! forward map in analysish.f90.
   subroutine invert_QJ_to_rp(Qv,Jv,Lv,rv,pv)
 
     implicit none
@@ -702,15 +765,20 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
     real(8), intent(in)  :: Qv,Jv,Lv
     real(8), intent(out) :: rv,pv
 
-    real(8) :: Eg,er1,er2,s1,s2,ecc,eta,g,gp,Qm,sg,pv2,smallpi
-    integer :: it
+    real(8) :: Eg,er1,er2,s1,s2,ecc,eta,sg,pv2,smallpi
 
     smallpi = acos(-1.0d0)
 
     Eg = -1.d0/(2.d0*(Jv+0.5d0*(Lv+sqrt(Lv**2+4.d0)))**2)
 
-    er1 = dsqrt((1.d0+Eg*(2.d0+Lv**2)-dsqrt(1.d0+2.d0*Eg*(2.d0+2.d0*Eg+Lv**2)))/(2.d0*Eg**2))
-    er2 = dsqrt((1.d0+Eg*(2.d0+Lv**2)+dsqrt(1.d0+2.d0*Eg*(2.d0+2.d0*Eg+Lv**2)))/(2.d0*Eg**2))
+!   Every radicand is clamped at zero, as in analysish: the discriminant
+!   vanishes on circular orbits and the inner turning point for L = 0, so
+!   rounding alone can turn them negative. Without the clamp the circular
+!   orbit J = 0 with L = 0.25 came out at r = 0, and with L = 0 the round
+!   trip of test U6 returned a wrong angle for 650 of 1600 orbits (D4 of the
+!   same audit).
+    er1 = dsqrt(max((1.d0+Eg*(2.d0+Lv**2)-dsqrt(max(1.d0+2.d0*Eg*(2.d0+2.d0*Eg+Lv**2),0.0d0)))/(2.d0*Eg**2),0.0d0))
+    er2 = dsqrt(max((1.d0+Eg*(2.d0+Lv**2)+dsqrt(max(1.d0+2.d0*Eg*(2.d0+2.d0*Eg+Lv**2),0.0d0)))/(2.d0*Eg**2),0.0d0))
     s1 = 1.d0 + sqrt(1.d0+er1**2)
     s2 = 1.d0 + sqrt(1.d0+er2**2)
 
@@ -718,14 +786,7 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 !   where rounding can make the radicand slightly negative.
     ecc = sqrt((-2.d0*Eg)**3)*sqrt(max(-Lv**2-2.d0*Eg-2.d0-0.5D0/Eg,0.0d0))/(-2.d0*Eg)
 
-    Qm = modulo(Qv,2.0d0*smallpi)
-    eta = Qm
-    do it=1,50
-      g  = eta - ecc*sin(eta) - Qm
-      gp = 1.d0 - ecc*cos(eta)
-      eta = eta - g/gp
-      if (abs(g) < 1.0d-14) exit
-    end do
+    eta = kepler_eta(modulo(Qv,2.0d0*smallpi),ecc,1.0d-14)
 
     sg = (s1+s2-cos(eta)*(s2-s1))/2.0d0
     rv = sqrt(max((sg-1.d0)**2-1.d0,0.0d0))
@@ -749,7 +810,7 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
     implicit none
 
     integer :: i,nunbound
-    real(8) :: en,er1,er2,s1,s2,ss,argaux,eta,smallpi
+    real(8) :: en,disc,er1,er2,s1,s2,ss,argaux,eta,smallpi
 
     smallpi = acos(-1.0d0)
 
@@ -758,7 +819,7 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
 
     nunbound = 0
 
-    !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(en,er1,er2,s1,s2,ss,argaux,eta) REDUCTION(+:nunbound)
+    !$OMP PARALLEL DO SCHEDULE(GUIDED) PRIVATE(en,disc,er1,er2,s1,s2,ss,argaux,eta) REDUCTION(+:nunbound)
     do i=1,Npart
       en = -1.0d0/(1.0D0+dsqrt(1.0D0+r_part(i)**2)) + 0.5d0*l_part(i)**2/(r_part(i)**2) + 0.5D0*p_part(i)**2
       if (en >= 0.0d0) then
@@ -767,12 +828,19 @@ subroutine save2Ddata_particles(directory,filename,Npart,t,r_part,p_part,var)
         j0_part(i) = 0.0d0
         cycle
       end if
-      er1 = dsqrt((1.d0+en*(2.d0+l_part(i)**2)-dsqrt(1.d0+2.d0*en*(2.d0+2.d0*en+l_part(i)**2)))/(2.d0*en**2))
-      er2 = dsqrt((1.d0+en*(2.d0+l_part(i)**2)+dsqrt(1.d0+2.d0*en*(2.d0+2.d0*en+l_part(i)**2)))/(2.d0*en**2))
+!     Radicands clamped at zero and the phase of a circular orbit (s1 = s2)
+!     set to a fixed value, as in analysish and in state "aa".
+      disc = dsqrt(max(1.d0+2.d0*en*(2.d0+2.d0*en+l_part(i)**2),0.0d0))
+      er1 = dsqrt(max((1.d0+en*(2.d0+l_part(i)**2)-disc)/(2.d0*en**2),0.0d0))
+      er2 = dsqrt(max((1.d0+en*(2.d0+l_part(i)**2)+disc)/(2.d0*en**2),0.0d0))
       s1 = 1.d0 + dsqrt(1.d0+er1**2)
       s2 = 1.d0 + dsqrt(1.d0+er2**2)
       ss = 1.d0 + dsqrt(1.d0+r_part(i)**2)
-      argaux = (s1+s2-2.0d0*ss)/(s2-s1)
+      if (s2 > s1) then
+        argaux = (s1+s2-2.0d0*ss)/(s2-s1)
+      else
+        argaux = 0.0d0
+      end if
       if (p_part(i)>=0.d0) then
         eta = dacos(sign(min(abs(argaux),1.0D0),argaux))
       else

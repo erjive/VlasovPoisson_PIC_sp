@@ -2,16 +2,18 @@
 !  (a) ida y vuelta (Q,J,L) -> invert_QJ_to_rp -> init_action_angle -> (Q',J')
 !      y energia H(r,p,L) = -1/(2(J+c)^2), para L en {0, 0.01, 0.5, 1, 2, 5},
 !      J en [1e-4, 10] y Q en [0, 2pi);
-!  (b) la iteracion de Newton de Kepler de invert_QJ_to_rp converge para
-!      toda excentricidad e < 1 y todo Q.
+!  (b) kepler_eta, que resuelve la ecuacion de Kepler para invert_QJ_to_rp,
+!      converge para toda excentricidad e < 1 y todo Q.
 ! Detecta los defectos D3 (Newton diverge para e >~ 0.98) y D4 (L=0:
-! radicando negativo por redondeo, NaN y r=0) de la auditoria.
+! radicando negativo por redondeo, NaN y r=0) de la auditoria. Hasta
+! corregir D3 la parte (b) probaba una copia del Newton sin salvaguarda,
+! que era lo que tenia invert_QJ_to_rp: fallaba en 190 de 10000 casos.
 program t_aa
   use parameters
   use arrays
   use utils
   implicit none
-  integer :: i,iq,ij,il,n,it,nbad,nfailQ,ntot
+  integer :: i,iq,ij,il,n,nbad,nfailQ,ntot
   real(8) :: Ls(6) = [0.0d0,0.01d0,0.5d0,1.0d0,2.0d0,5.0d0]
   real(8) :: Q,J,L,rv,pv,E,c,eQ,eJ,eE,pi,ecc,eta,g,Qm,resmax,dQ
   pi = acos(-1.0d0)
@@ -54,18 +56,13 @@ program t_aa
     ecc = 1.0d0 - 10.0d0**(-dble(i)/49.0d0*8.0d0)
     do iq=0,199
       Qm = dble(iq)/200.0d0*2*pi
-      eta = Qm
-      do it=1,50
-        g = eta - ecc*sin(eta) - Qm
-        eta = eta - g/(1.0d0-ecc*cos(eta))
-        if (abs(g) < 1.0d-14) exit
-      end do
+      eta = kepler_eta(Qm,ecc,1.0d-14)
       g = eta - ecc*sin(eta) - Qm
       resmax = max(resmax,abs(g))
       if (.not. abs(g) <= 1.0d-12) nbad = nbad+1
     end do
   end do
-  print '(a,i5,a,es9.2)','  Newton de Kepler (copia de invert_QJ_to_rp), e en [0, 1-1e-8]: sin converger',nbad,' de 10000; max|g|=',resmax
+  print '(a,i5,a,es9.2)','  Kepler (kepler_eta de utils.f90), e en [0, 1-1e-8]: sin converger',nbad,' de 10000; max|g|=',resmax
   if (ntot == 0 .and. nbad == 0) then
     print '(a)', 'PASA U6 mapa angulo-accion'
   else

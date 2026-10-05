@@ -276,6 +276,16 @@ se marca.
 
 ## D. Errores encontrados
 
+**Estado de las correcciones** (rama `mejoras/portar`, desde el 2026-10-04). Son las de la
+auditoría de `vlasov-poisson_PIC` (`AUDITORIA_L0_2026-09-21.md`, hallazgos E) que faltaban
+aquí. Cada una lleva su medición. "Neutralidad" quiere decir: las 26 configuraciones de
+`reproducir/corridas` recortadas a 200 pasos (283 archivos de salida) y los tres casos de
+`verificacion/regresion.sh`, con el binario anterior al cambio y con el nuevo, a 4 hilos.
+
+| Id | Estado | Medición |
+|---|---|---|
+| D3, D4 | corregido | Una función `kepler_eta(Q, e, tol)` en `utils` (la de `vlasov-poisson_PIC`, E12) resuelve Q = η − e sen η para `invert_QJ_to_rp`: primero el Newton de siempre, con las mismas operaciones; se acepta si salió por tolerancia con un último paso \|g/g′\| ≤ √tol y η ∈ [Q − e, Q + e], y si no, se resuelve con Newton acotado y bisección. Radicandos con `max(·, 0)` en `invert_QJ_to_rp` e `init_action_angle`, y fase de la órbita circular (s₁ = s₂) fijada en `init_action_angle`, como ya hacían `analysish` y el estado `aa` (E13). (a) U6, ecuación de Kepler: de 190 de 10000 ángulos sin converger (residuo hasta 7.7·10²⁵) a ninguno (residuo ≤ 8.9·10⁻¹⁶). La parte (b) de U6 probaba una copia del Newton viejo y ahora llama a `kepler_eta`. (b) U6, ida y vuelta (Q, J, L) → (r, p) → (Q, J): fases erradas en 650, 2 y 2 de 1600 órbitas con L = 0, 0.01 y 0.5 → en ninguna; max\|ΔQ\| ≤ 1.3·10⁻¹¹ en los seis valores de L. (c) Órbita circular exacta (J = 0) con L = 0.25: antes r = 0 en los 40 ángulos probados; ahora r_c = 0.80410872. (d) Neutralidad: idénticos bit a bit (9 de las 26 configuraciones usan `aa_quad` y 5 el integrador `analytic`, que invierte cada partícula en cada paso). (e) Costo del integrador `analytic` (`gauss_an`, 128 000 partículas, 2000 pasos, orden ABBA dos veces): 31.9, 31.5 y 31.4 s antes; 31.1, 31.1, 31.4 y 31.3 s después (la primera corrida de la serie, 27.1 s con el binario anterior, se descarta: el procesador aún no estaba caliente) |
+
 Nuevos (N) y abiertos de la auditoría anterior (D).
 
 | Id | Severidad | Archivo | Función | Problema | Evidencia | Corrección |
