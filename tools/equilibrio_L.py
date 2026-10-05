@@ -57,7 +57,7 @@ class PoissonCodigo:
 
     def __init__(self, dr, rmax, n):
         self.dr, self.n = dr, n
-        self.Nr = int(rmax/dr) + 1
+        self.Nr = int(np.floor(rmax/dr + 0.5))     # nint, como set_grid_size (utils.f90)
         self.r = (np.arange(1, self.Nr + 1) - 0.5)*dr
         self.vol = 4*np.pi*dr*(self.r**2 + (n + 1)*dr**2/12.0)
         # pesos de la cuadratura de masa: M(r_i) = M(r_{i-1}) + A_i rho_{i-1} + B_i rho_i

@@ -18,7 +18,7 @@ program t_poisson_nodal
   Rsup = 0.8d0*rmax
   rmin=0; autointeraction=.true.; BGtype='null'
   bsplineorder=1; Npc=1; Nlc=1; drc=1; dpc=1; dlc=1
-  Nrc = int((rmax-rmin)/dr) + 1
+  Nrc = nint((rmax-rmin)/dr)
   call set_grid_size(); call alloc_mem_set0(); call construct_grid()
   do i=1,Nr
     if (r(i) < Rsup) then

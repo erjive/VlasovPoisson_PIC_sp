@@ -22,9 +22,26 @@ module utils
 ! ***   FIND GRID SIZES   ***
 ! ***************************
 
-    ! Find out number of grid points in r direction.
-    ! Staggered grid, r(i) = rmin + (i-1/2) dr, covering [rmin,rmax].
-    Nr = int((rmax-rmin)/dr) + 1
+    real(8) :: qgrid
+
+    ! Number of cells in r. The grid is staggered, r(i) = rmin + (i-1/2) dr
+    ! for i = 1..Nr, so Nr = (rmax-rmin)/dr cells cover [rmin,rmax] and the
+    ! last point is rmax - dr/2. It used to be int((rmax-rmin)/dr) + 1: one
+    ! cell too many whenever the quotient is an integer, with the last point
+    ! half a cell past rmax (301 points and r = 30.05 for rmax = 30 and
+    ! dr = 0.1), and the right number only when rounding left the quotient
+    ! just below it. Rounding to the nearest integer gives Nr*dr = rmax - rmin
+    ! whenever the two are commensurate, and the run says so when they are
+    ! not (same rule as in vlasov-poisson_PIC, AUDITORIA_L0_2026-09-21.md,
+    ! E16).
+    qgrid = (rmax-rmin)/dr
+    Nr = nint(qgrid)
+
+    if (abs(qgrid-dble(Nr)) > 1.0d-8*max(1.0d0,qgrid)) then
+       print *
+       print *, 'WARNING: (rmax-rmin)/dr = ',qgrid,' is not an integer;'
+       print *, '         the grid ends at r = ',rmin+dble(Nr)*dr,' instead of rmax = ',rmax
+    end if
 
     print *
     print *, 'Number of points in r direction ',Nr

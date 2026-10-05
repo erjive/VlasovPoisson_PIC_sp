@@ -34,7 +34,7 @@ echo "== U2";  ./t_origen | grep -v -E 'Number of|Memory|^ *$' | tee u2.txt;  an
 echo "== U3"
 for caso in "2.0 0.05" "20.0 0.01"; do
   set -- $caso; ./t_poisson_nodal $1 $2 > /dev/null
-  n=$(python3 -c "print(int($1/$2)+1)"); tol=$([ $n -gt 500 ] && echo 1e-13 || echo 1e-14)
+  n=$(python3 -c "print(int($1/$2+0.5))"); tol=$([ $n -gt 500 ] && echo 1e-13 || echo 1e-14)
   python3 "$AQUI/py/ref_nodal.py" nodal_$n.dat $tol | tee u3_$n.txt; anota "$(grep -E '^(PASA|FALLA)' u3_$n.txt)"
 done
 echo "== U4";  ./t_poisson_orden | grep -v -E "Number of|Memory|^ *$" | tee u4.txt; anota "$(grep -E '^(PASA|FALLA)' u4.txt)"
