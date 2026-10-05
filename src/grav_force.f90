@@ -10,7 +10,7 @@
 !!   Central    pot = -1/r
 !!   sphere     constant density star of radius 1: pot = (r**2-3)/2 inside,
 !!              -1/r outside
-!!   iso, isotrun, nfw, burkert   see bgpot below
+!!   iso, isotrun, nfw, burkert   see bgpot in utils.f90
 !!   null       none
 
 subroutine grav_force
@@ -158,10 +158,10 @@ subroutine grav_force
 
 contains
 
-! Backgrounds given by closed formulas for the potential and the force
-! (force = -dpot/dr, checked symbolically for every one). Particles feel
-! them always; with self-gravity they are added to the self potential and
-! force, on the particles and on the grid, which only exists then.
+! Backgrounds given by closed formulas for the potential and the force,
+! bgpot and bgforce of utils.f90. Particles feel them always; with
+! self-gravity they are added to the self potential and force, on the
+! particles and on the grid, which only exists then.
 
   subroutine add_background
 
@@ -176,76 +176,5 @@ contains
     end if
 
   end subroutine add_background
-
-! The closed forms are evaluated at |r|, and the force carries the sign of r.
-! A particle may step to r < 0 inside a time step (main.f90 reflects it only
-! afterwards) and the grid has ghost points at negative radii, so the
-! background has to be even in r and its force odd. Written in terms of r
-! itself, "nfw" and "burkert" are neither (nfw even reverses the sign of the
-! force, pushing a particle that crosses the origin further out), "sphere"
-! takes its inner branch for every r < 1 including r < -1, and "iso" is not
-! defined at all for r < 0 (AUDITORIA_2026-09-20.md, point 4).
-
-  elemental real(8) function bgpot(x)
-
-    real(8), intent(in) :: x
-    real(8) :: a
-
-    a = abs(x)
-
-    select case (BGtype)
-    case ("sphere")
-!      Constant density star of mass 1 and radius 1.
-       if (a<1.d0) then
-          bgpot = 0.5d0*(a**2 - 3.d0)
-       else
-          bgpot = - 1.d0/a
-       end if
-    case ("iso")
-       bgpot = 3.0d0*log(a)
-    case ("isotrun")
-       bgpot = (10.0d0/6.0d0)*( 2.0d0*atan(a)/a + log(a**2+1) )
-    case ("nfw")
-       bgpot = -16.0d0*log( 1.0d0+a )/a
-    case ("burkert")
-       bgpot = ( 10.0d0/(3.0d0*a) )*( 2.0d0*(1.0d0+a)*atan(a) -2.0d0*(1.0d0+a)*log(1.0d0+a) &
-               -(1.0d0-a)*log(1.0d0+a**2) )
-    case default
-       bgpot = 0.0d0
-    end select
-
-  end function bgpot
-
-  elemental real(8) function bgforce(x)
-
-    real(8), intent(in) :: x
-    real(8) :: a
-
-    a = abs(x)
-
-    select case (BGtype)
-    case ("sphere")
-       if (a<1.d0) then
-          bgforce = - a
-       else
-          bgforce = - 1.d0/a**2
-       end if
-    case ("iso")
-       bgforce = -3.0d0/a
-    case ("isotrun")
-       bgforce = -(10.0d0/3.0d0)*( a-atan(a) )/a**2
-    case ("nfw")
-       bgforce = -16.0d0*( log(1.0d0+a)-a/(1.0d0+a) )/a**2
-    case ("burkert")
-       bgforce = -( 10.0d0/(3.0d0*a*a) )*( log( (1.0d0+a**2)*(1.0d0+a)**2 ) - 2.0d0*atan(a) )
-    case default
-       bgforce = 0.0d0
-    end select
-
-!   Odd extension to r < 0.
-
-    if (x < 0.0d0) bgforce = - bgforce
-
-  end function bgforce
 
 end subroutine grav_force

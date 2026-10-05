@@ -233,8 +233,9 @@ end subroutine construct_grid
 
   !> Set the time step.
   !! Here we find the time step using information from the
-  !! Courant factor, the maximum value of the momentum, and
-  !! the maximum value of the force (acceleration).
+  !! Courant factor, the maximum value of the momentum, the
+  !! maximum value of the force (acceleration) and the passage
+  !! of the particles through their pericentres.
   subroutine set_timestep
 
 ! *********************
@@ -247,6 +248,9 @@ end subroutine construct_grid
 
   integer i
   real(8) dtr,dtp,vmax  ! Auxiliary variables.
+  real(8) dtl
+  real(8), save :: rpmin = 0.0d0, tpmin = -1.0d0   ! Pericentre bound; negative: not computed yet.
+  logical first
 
 ! pmax > 0 is the velocity scale chosen by the user; pmax <= 0 takes the
 ! largest |p| of the particles now. Neither criterion knows the orbital
@@ -297,7 +301,223 @@ end subroutine construct_grid
      stop 1
   end if
 
+! Third bound, from the pericentre. Near it the length scale of the orbit is
+! not dr but r_p, and the particle moves at v_p = L/r_p, so the Courant
+! condition with that scale is
+!
+!   dtl = courant * min_j r_p,j/v_p,j = courant * min_j r_p,j**2/L_j,
+!
+! with r_p,j the pericentre of particle j. Neither bound above sees it: with
+! L = 1e-3 and dt = 0.01 an isochrone orbit had |dE/E| = 3.5 (leapfrog) and
+! 200 (yoshida4). The energy error peaks at each pericentre, at about
+! 0.03 (Omega_p dt)**2 with leapfrog and 0.13 (Omega_p dt)**4 with yoshida4,
+! Omega_p = L/r_p**2, so courant sets the accuracy and the bound only makes
+! sure that the passage is resolved: away from the pericentre that orbit
+! keeps its energy to 9e-4 with courant = 0.5 and to 5e-9 with 0.25
+! (yoshida4; AUDITORIA_FISICA_2026-09-21.md, N1; same bound as in
+! vlasov-poisson_PIC). For L of order one it is not the smallest of the
+! three. A particle with L = 0 has no pericentre: it goes through the
+! centre, where the field is regular, and is left out.
+!
+! The pericentres are computed once, at the first call, in the field at
+! t = 0, also with dt_switch="var": one bisection per particle at every step
+! made a self-gravitating run ten times slower. With self-gravity that field
+! can change: in a cold collapse the potential at the centre deepens and the
+! pericentres shrink, and a step estimated at t = 0 does not resolve them.
+!
+! The smallest pericentre and the largest Omega_p*dt are reported then,
+! whichever bound sets the step.
+
+  first = (tpmin < 0.0d0)
+  if (first) call pericentre_min(rpmin,tpmin)
+
+  if (tpmin < huge(1.0d0)) then
+     dtl = courant*tpmin
+     if (dtl < dt) then
+        dt = dtl
+        if (first) then
+           print *
+           print *, 'Time step set by the pericentre, courant*min(r_p**2/L).'
+        end if
+     end if
+     if (first) then
+        print *
+        print *, 'Smallest pericentre r_p = ',rpmin
+        print *, 'Largest Omega_p*dt = L*dt/r_p**2 = ',dt/tpmin
+        print *, '(energy error at each pericentre: about 0.03 (Omega_p*dt)**2 with leapfrog,'
+        print *, ' 0.13 (Omega_p*dt)**4 with yoshida4)'
+     end if
+  end if
+
   end subroutine set_timestep
+
+
+  !> Smallest pericentre of the particles, rpmin, and smallest time of passage
+  !! through it, tpmin = min_j r_p,j**2/L_j, in the field at the time of the
+  !! call (the one set by the last grav_force), from
+  !!
+  !!   p**2/2 + L**2/(2 r**2) + Phi(r) = E,   r_p = smallest root in (0,|r|].
+  !!
+  !! Phi is the background (closed form) plus, with self-gravity, the self
+  !! potential of the grid: pot minus the background, linear between points,
+  !! constant inside r(1) (it is even and smooth at the origin) and
+  !! Phi(r_Nr) r_Nr/r beyond the grid. The energy uses the same Phi, so the
+  !! root always lies in (0,|r|]. The effective potential of a potential that
+  !! grows with r has a single minimum, so the root is unique and a bisection
+  !! (in log r, down to 1e-12 |r|) finds it; the lower end of the bracket is
+  !! returned, so the estimate errs on the safe side. The softening eps is
+  !! included as in grav_force. Particles with L = 0 are skipped; if every
+  !! particle has L = 0 both results are huge(1.0d0).
+  subroutine pericentre_min(rpmin,tpmin)
+
+    real(8), intent(out) :: rpmin,tpmin
+
+    real(8), allocatable :: ps(:)
+    real(8) :: x,E,lo,hi,mid
+    integer :: j,it
+    logical :: sg
+
+    sg = autointeraction
+
+    if (sg) then
+       allocate(ps(1:Nr))
+       ps = pot(1:Nr) - bgpot(r(1:Nr))
+    end if
+
+    rpmin = huge(1.0d0)
+    tpmin = huge(1.0d0)
+
+    !$OMP PARALLEL DO SCHEDULE(STATIC) PRIVATE(x,E,lo,hi,mid,it) REDUCTION(min:rpmin,tpmin)
+    do j=1,Npart
+       if (l_part(j) == 0.0d0) cycle
+       x  = abs(r_part(j))
+       E  = 0.5d0*p_part(j)**2 + veff(x,l_part(j))
+       lo = 1.0d-12*x
+       hi = x
+       if (veff(lo,l_part(j)) > E) then
+          do it=1,64
+             mid = sqrt(lo*hi)
+             if (veff(mid,l_part(j)) > E) then
+                lo = mid
+             else
+                hi = mid
+             end if
+          end do
+       end if
+       rpmin = min(rpmin,lo)
+       tpmin = min(tpmin,lo**2/l_part(j))
+    end do
+    !$OMP END PARALLEL DO
+
+    if (sg) deallocate(ps)
+
+  contains
+
+    real(8) function veff(y,am)
+      real(8), intent(in) :: y,am
+      integer :: k
+      real(8) :: w
+      veff = 0.5d0*am**2/(y**2 + eps**2) + bgpot(y)
+      if (sg) then
+         if (y <= r(1)) then
+            veff = veff + ps(1)
+         else if (y >= r(Nr)) then
+            veff = veff + ps(Nr)*r(Nr)/y
+         else
+            k = min(Nr-1,int(y/dr + 0.5d0))
+            w = (y - r(k))/dr
+            veff = veff + (1.0d0-w)*ps(k) + w*ps(k+1)
+         end if
+      end if
+    end function veff
+
+  end subroutine pericentre_min
+
+
+! Backgrounds given by closed formulas for the potential and the force
+! (force = -dpot/dr, checked symbolically for every one), in units of the
+! mass and the scale of the background. grav_force has its own fused loops
+! for the isochrone and the point mass; their cases here are for
+! set_timestep.
+!
+! The closed forms are evaluated at |r|, and the force carries the sign of r.
+! A particle may step to r < 0 inside a time step (main.f90 reflects it only
+! afterwards) and the grid has ghost points at negative radii, so the
+! background has to be even in r and its force odd. Written in terms of r
+! itself, "nfw" and "burkert" are neither (nfw even reverses the sign of the
+! force, pushing a particle that crosses the origin further out), "sphere"
+! takes its inner branch for every r < 1 including r < -1, and "iso" is not
+! defined at all for r < 0 (AUDITORIA_2026-09-20.md, point 4).
+
+  elemental real(8) function bgpot(x)
+
+    real(8), intent(in) :: x
+    real(8) :: a
+
+    a = abs(x)
+
+    select case (BGtype)
+    case ("Isochrone")
+       bgpot = -1.0d0/(1.0d0+sqrt(1.0d0+a**2))
+    case ("Central")
+       bgpot = -1.0d0/a
+    case ("sphere")
+!      Constant density star of mass 1 and radius 1.
+       if (a<1.d0) then
+          bgpot = 0.5d0*(a**2 - 3.d0)
+       else
+          bgpot = - 1.d0/a
+       end if
+    case ("iso")
+       bgpot = 3.0d0*log(a)
+    case ("isotrun")
+       bgpot = (10.0d0/6.0d0)*( 2.0d0*atan(a)/a + log(a**2+1) )
+    case ("nfw")
+       bgpot = -16.0d0*log( 1.0d0+a )/a
+    case ("burkert")
+       bgpot = ( 10.0d0/(3.0d0*a) )*( 2.0d0*(1.0d0+a)*atan(a) -2.0d0*(1.0d0+a)*log(1.0d0+a) &
+               -(1.0d0-a)*log(1.0d0+a**2) )
+    case default
+       bgpot = 0.0d0
+    end select
+
+  end function bgpot
+
+  elemental real(8) function bgforce(x)
+
+    real(8), intent(in) :: x
+    real(8) :: a
+
+    a = abs(x)
+
+    select case (BGtype)
+    case ("Isochrone")
+       bgforce = -a/(sqrt(1.0d0+a**2)*(1.0d0+sqrt(1.0d0+a**2))**2)
+    case ("Central")
+       bgforce = -1.0d0/a**2
+    case ("sphere")
+       if (a<1.d0) then
+          bgforce = - a
+       else
+          bgforce = - 1.d0/a**2
+       end if
+    case ("iso")
+       bgforce = -3.0d0/a
+    case ("isotrun")
+       bgforce = -(10.0d0/3.0d0)*( a-atan(a) )/a**2
+    case ("nfw")
+       bgforce = -16.0d0*( log(1.0d0+a)-a/(1.0d0+a) )/a**2
+    case ("burkert")
+       bgforce = -( 10.0d0/(3.0d0*a*a) )*( log( (1.0d0+a**2)*(1.0d0+a)**2 ) - 2.0d0*atan(a) )
+    case default
+       bgforce = 0.0d0
+    end select
+
+!   Odd extension to r < 0.
+
+    if (x < 0.0d0) bgforce = - bgforce
+
+  end function bgforce
 
 
 

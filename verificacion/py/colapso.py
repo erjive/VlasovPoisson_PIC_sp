@@ -6,8 +6,12 @@
 # N = 200 y 400 cascaras. Un esquema consistente con el continuo converge
 # mas rapido que 1/N; un sesgo O(1/N) (defecto D1: autogravedad de cada
 # cascara quitada) da un error ~ 1/N.
+# El paso lo elige el codigo: con L = 1e-4 lo fija la cota del pericentro de
+# set_timestep (5.0e-5; sin ella seria courant dr/pmax = 2.5e-3), asi que el
+# numero de pasos hasta t = 0.8 se calcula con el paso que informa una
+# corrida de cero pasos.
 # Uso: colapso.py <VP_PIC> <dir_trabajo>
-import numpy as np, h5py, subprocess, sys, os
+import numpy as np, h5py, subprocess, sys, os, re
 exe, wd = sys.argv[1], sys.argv[2]
 os.makedirs(wd, exist_ok=True); os.chdir(wd)
 plantilla = """dr = 0.01
@@ -28,10 +32,10 @@ CheckPointfile = ic_{N}.dat
 courant = 0.5
 pmax = 2.0
 dt_switch = fix
-Nt = 320
-time_output = 100000
-spatial_output = 40
-field_output = 320
+Nt = {Nt}
+time_output = 100000000
+spatial_output = {so}
+field_output = {so}
 output_format = hdf5
 bsplineorder = 1
 integrator = yoshida4
@@ -54,7 +58,11 @@ for N in (200, 400):
         for k in range(1, N+1):
             a = (k-1)/N; b = k/N
             fo.write('%.17e %.17e %.17e %.17e\n' % (0.5*(a+b), 0.0, L, (b**3-a**3)/L))
-    open('colapso_%d.par' % N, 'w').write(plantilla.format(N=N))
+    open('colapso_%d.par' % N, 'w').write(plantilla.format(N=N, Nt=0, so=1))
+    out = subprocess.run([exe, 'colapso_%d.par' % N], capture_output=True, text=True, check=True).stdout
+    dt = float(re.search(r'Time step fixed at size:\s*(\S+)', out).group(1))
+    Nt = round(0.8/dt)
+    open('colapso_%d.par' % N, 'w').write(plantilla.format(N=N, Nt=Nt, so=Nt))
     subprocess.run([exe, 'colapso_%d.par' % N], stdout=open('colapso_%d.log' % N, 'w'), stderr=subprocess.STDOUT, check=True)
     h = h5py.File('colapso_%d/vlasov_output.h5' % N, 'r')
     st = sorted(k for k in h if k.startswith('step_'))
@@ -63,7 +71,7 @@ for N in (200, 400):
     sel = (r0 > 0.1) & (r0 < 0.9)
     e = np.abs(r[sel]-rref[sel])/rref[sel]
     med[N] = np.median(e)
-    print('  N=%d  t=%.2f  error relativo en r: mediana %.2e, maximo %.2e' % (N, t, med[N], e.max()))
+    print('  N=%d  dt=%.2e  t=%.2f  error relativo en r: mediana %.2e, maximo %.2e' % (N, dt, t, med[N], e.max()))
 orden = np.log2(med[200]/med[400])
 ok = med[400] < 1e-4 and orden > 1.5
 print('  orden en 1/N: %.2f' % orden)
