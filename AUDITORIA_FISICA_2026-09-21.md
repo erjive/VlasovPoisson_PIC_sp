@@ -13,6 +13,13 @@ depende de la autogravedad con el binario actual y corre las simulaciones de `re
 cifras que se reutilizan de la auditoría anterior se marcan y se justifica por qué siguen
 valiendo.
 
+**Actualización del 2026-10-04.** Los hallazgos N1, N2, D2′, D3 y D4 de este informe, y D11
+de la auditoría anterior, están corregidos. El estado de cada uno, con su medición, está en la
+tabla que abre la sección D. El resto del informe describe el código del 21 de septiembre y
+no se cambió: donde dice que una prueba falla o que algo es incorrecto, vale para esa fecha.
+Hoy pasan las 16 pruebas de `verificacion/correr.sh`. Siguen abiertos N3, los informativos N4
+y N5, y D7 (el manuscrito).
+
 **Reglas.** No se modificó `src/`. Una simulación a la vez. Cada afirmación lleva su prueba y su
 número; donde no hubo prueba, se dice. Las copias instrumentadas se compilaron aparte.
 

@@ -25,14 +25,14 @@ de cada verificación están en `BUGS_TODO.md`.
 | B1 parámetros por nombre | hecho | `9aad262` |
 | B2 código de salida | hecho | `a5993e4` |
 | B3 directorio | hecho | `e9cb7a9` |
-| B4 semilla | no aplica: no hay estados aleatorios | — |
+| B4 semilla | hecho con el estado `aa_random` (`seed`, escrita en `params_usados.par`) | `b842bad` |
 | B5 Makefile | hecho (`-w` fuera, `h5fc`) | `506a3df`, `6d8b997` |
 | B6 legado | hecho | `fd39130` |
 | B7 salida de h_k | hecho, con `field_output` | `8203a63` |
 | B8 comentarios | hecho | `23a30ac` |
 | C1 a_k una vez | hecho | `6200fe2` |
-| C2 rendimiento | hecho: 2.16× con autogravedad, 2.39× sin ella; `build_cell_list` sigue serial | `5219f6f`..`75c5779` |
-| C3 integrador analytic | hecho | `7bc1f93` |
+| C2 rendimiento | hecho: 2.16× con autogravedad, 2.39× sin ella; `build_cell_list` en paralelo (10 a 14 % menos con 4 hilos) | `5219f6f`..`75c5779`, `ee6bd8e` |
+| C3 integrador analytic | hecho; `yoshida6` agregado después | `7bc1f93`, `d26f14e` |
 | D1 checkpoint | hecho (y `l_part` en HDF5) | `894a120` |
 | D2 equilibrio F(J,L) | hecho (`tools/equilibrio_L.py`) | `ed6e9cb` |
 | D3 exacto y pruebas agnósticas | hecho (`dftype`, `tools/hk_exacto.py`) | `065519a`, `94e697d` |
@@ -40,6 +40,34 @@ de cada verificación están en `BUGS_TODO.md`.
 
 Además, encontrados al verificar: h_k NaN con partículas no ligadas (`732250f`) y sumas
 OpenMP no deterministas en energía y h_k (`e6d2011`).
+
+### Portado el 2026-10-04 desde la auditoría de `vlasov-poisson_PIC`
+
+`vlasov-poisson_PIC` recibió su propia auditoría después de este inventario
+(`AUDITORIA_L0_2026-09-21.md`, hallazgos E). Lo que faltaba aquí se portó el 4 de octubre,
+un cambio por commit. Las mediciones de las correcciones están en la sección D de
+`AUDITORIA_FISICA_2026-09-21.md`; las de las funciones nuevas, en el mensaje de cada
+commit.
+
+| cambio | allá | aquí | commit |
+|---|---|---|---|
+| Kepler con salvaguarda y radicandos acotados | E12, E13 | D3, D4 | `e0ec257` |
+| Cota del paso de tiempo por el pericentro | E11 | N1 | `21067f5` |
+| Masa exacta del campo con splines de orden 2 y 3 | E8 | **no se portó**: baja el orden de Poisson de 2 a 1 y deja un piso en el colapso frío | `7144f7a` |
+| Depósito de partículas en r < 0 | ventana más ancha | D2′, lista de celdas por \|r\| | `e5c72bc` |
+| L = 0 | E1, la corrida aborta | N2, se corrige: aquí L = 0 es válido | `25baf6c` |
+| Tamaño de la malla redondeado | E16 | D11 | `00e156c` |
+| `build_cell_list` en paralelo | `bb57363` | C2 | `ee6bd8e` |
+| Integrador `yoshida6` | sí | C3 decía que no hizo falta | `d26f14e` |
+| Salida `raw` | `raw_io.f90` | `raw_io.f90`, `tools/raw_io.py` | `62bf5b6` |
+| Estados `aa_halton` y `aa_random`, `seed` | sí | A3 y B4 los habían dejado fuera | `b842bad` |
+
+`verificacion/correr.sh` pasó de 9 pruebas que pasaban y 4 que fallaban a 16 que pasan
+(U8, I5 e I6 son nuevas). Siguen abiertos, de la auditoría física: N3 (los fondos `nfw`,
+`burkert` e `isotrun` pierden cifras cerca de r = 0), los informativos N4 y N5, y D7 (el
+manuscrito). Siguen sin portar las herramientas
+de `vlasov-poisson_PIC/reproducir/scripts` para equilibrios con borde compacto, la
+respuesta lineal y la ganancia del lazo.
 
 Referencias: `vlasov-poisson_PIC/BUGS_TODO.md`, `vlasov-poisson_PIC/PREGUNTAS_ABIERTAS.md`
 y `vlasov-poisson_PIC/docs/introduccion/vlasov_intro.tex`.

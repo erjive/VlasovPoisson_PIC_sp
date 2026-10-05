@@ -351,7 +351,9 @@ $s=1+\sqrt{1+r^2}$,
 con una excentricidad efectiva $e(E,L)$ y $\eta\in[0,\pi]$ si $p_r\ge0$. El mapa directo
 es explícito; el inverso exige resolver la ecuación de Kepler $Q=\eta-e\sin\eta$ por
 Newton. En el código es \texttt{invert\_QJ\_to\_rp} (\texttt{src/utils.f90}), con $L$ por
-partícula.
+partícula. La ecuación la resuelve \texttt{kepler\_eta}, que comprueba el resultado del
+Newton y, si no es fiable, lo repite acotado y con bisección: sin esa salvaguarda fallaba
+desde $e\approx0.98$.
 
 \begin{aviso}
 \textsc{detalle numérico: la ida y vuelta.} Se invirtieron 480\,000 puntos
@@ -944,9 +946,19 @@ de Yoshida~\cite{yoshida1990}, con pesos $w_1=1/(2-2^{1/3})$ y
 $w_0=-2^{1/3}/(2-2^{1/3})$. Algunos subpasos van hacia atrás en el tiempo; eso es lo que
 cancela el error de orden bajo. En el código, yoshida4 son tres pares \emph{kick--drift}:
 tres fuerzas por paso, y una cuarta solo en los pasos que escriben diagnósticos.
+\texttt{yoshida6} es la composición de siete subpasos, de sexto orden, del mismo artículo.
+Cuesta siete fuerzas por paso y con autogravedad no mejora la energía, porque ese error no
+viene del paso de tiempo.
 
 El paso de tiempo es \textbf{fijo} por omisión: un paso que cambia de un paso a otro rompe
-el carácter simpléctico. Hay además un integrador \texttt{analytic}, que avanza cada
+el carácter simpléctico. Se calcula al arrancar como el menor de tres valores:
+$c\,\Delta r/p_{\max}$, $c\sqrt{2\Delta r/F_{\max}}$ y $c\,\min_j r_{p,j}^2/L_j$, con $c$ el
+factor \texttt{courant} y $r_{p,j}$ el pericentro de la partícula $j$. El tercero es el
+tiempo que tarda una partícula en pasar por su pericentro y solo actúa si hay partículas
+con $L$ pequeño. En las corridas de estas notas no actúa: $\Omega_p\Delta
+t=L\Delta t/r_p^2$ vale entre $0.003$ y $0.009$ en las del isócrono integradas con
+yoshida4 y hasta $0.18$ en las de \texttt{09\_fondos}, frente a $c=0.5$ o menos. Hay
+además un integrador \texttt{analytic}, que avanza cada
 partícula con~\eqref{eq:solucion} y el mapa inverso: sin autogravedad es exacto para
 cualquier $\Delta t$ y sirve de referencia para medir el error de los otros.
 
@@ -964,7 +976,11 @@ cuadratura}: en $Q$ es el trapecio periódico, que converge más rápido que cua
 potencia~\cite{trefethen2014}; en $J$ y $L$ es la regla del punto medio, que converge
 como $N^{-2}$ si el integrando no se anula en los bordes y mucho más rápido si se anula.
 En el código con $L$ fijo, cualquier desplazamiento aleatorio de los nodos dejó el error
-en $N^{-1/2}$; aquí no hay desplazamientos.
+en $N^{-1/2}$. Las corridas de estas notas no usan desplazamientos. Para hacer esa
+comparación existen dos estados más: \texttt{aa\_halton}, la rejilla de \texttt{aa} con
+cada nodo desplazado dentro de su celda por una secuencia de Halton, y
+\texttt{aa\_random}, partículas de igual masa sorteadas con densidad proporcional a $FL$
+y semilla \texttt{seed}.
 
 \paragraph{Desde un archivo} (estado \texttt{checkpoint}): una línea
 ``$r\ p_r\ L\ f$'' por partícula. Así entran estados que el código no construye, como un
