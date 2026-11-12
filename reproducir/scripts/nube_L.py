@@ -27,14 +27,20 @@ de la continua más de 7e-4 en toda la corrida. Las que terminan en v repiten la
     python3 nube_L.py preparar                  condiciones iniciales y .par
     python3 nube_L.py tiempo [--solo ...]       corrida corta de cada caso y costo estimado
     python3 nube_L.py correr [--solo ...]       lo que falte, una corrida detrás de otra, 4 hilos
-    python3 nube_L.py analizar [--solo ...]     mapa (Q, J) de cada instantánea y medidas
-    python3 nube_L.py tanda <nombre>            corre y analiza una tanda (TANDAS), en orden
+    python3 nube_L.py analizar [--solo ...]     mapa (Q, J) de cada instantánea
+    python3 nube_L.py medir [--solo ...]        medidas de cada corrida, en archivos pequeños
+    python3 nube_L.py tanda <nombre>            corre, analiza y mide una tanda (TANDAS), en orden
+    python3 nube_L.py lista [tandas o corridas] nombres de las corridas (para los guiones del cluster)
     python3 nube_L.py consistencia              C021 frente a la corrida B021 de vlasov-poisson_PIC
     python3 nube_L.py tabla                     medidas frente al modelo reducido
     python3 nube_L.py reticulas                 coherencia libre de la retícula en L de cada corrida
 
 Necesita el repositorio vlasov-poisson_PIC junto a este (o en la variable VP_PIC_FIJO): de él salen
 la retícula, las medidas y las corridas con las que se compara. Todo queda en exe/rep/12_nube/.
+`tabla` solo lee los archivos pequeños que deja `medir` (medidas.npz, capas.npz, campo.npz,
+resumen.npz), así que las corridas se pueden hacer en otra máquina y traer solo esos archivos
+(reproducir/cluster/). Las corridas usan VP_HILOS hilos (4 por omisión) y el análisis VP_PROCESOS
+procesos (4).
 """
 import os, sys, subprocess, time, argparse, warnings, hashlib, datetime
 for _k, _v in (('OMP_NUM_THREADS', '4'), ('OMP_PLACES', 'cores'), ('OMP_PROC_BIND', 'close')):
@@ -222,7 +228,7 @@ def preparar():
 
 
 def _ejecutar(n, extra=(), log=None):
-    env = dict(os.environ, OMP_NUM_THREADS='4', OMP_PLACES='cores', OMP_PROC_BIND='close')
+    env = dict(os.environ, OMP_NUM_THREADS=os.environ.get('VP_HILOS', '4'), OMP_PLACES='cores', OMP_PROC_BIND='close')
     t0 = time.time()
     r = subprocess.run(['./VP_PIC', os.path.join(PARDIR, f'{n}.par'), *extra], cwd=EXE,
                        stdout=open(log, 'w'), stderr=subprocess.STDOUT, env=env)
@@ -254,14 +260,26 @@ def tiempo(solo=None, pasos=2000):
     print(f'total de lo que falta: {total/60:.0f} min ({total/3600:.1f} h), sin el análisis')
 
 
-def metadatos(n, par):
-    """Qué produjo la corrida: sha256 del ejecutable y del .par, y commit del repositorio."""
+def metadatos(n, par, segundos):
+    """Qué produjo la corrida: sha256 del ejecutable y del .par, commit del repositorio, máquina y
+    tiempo. Se guarda en <n>.meta junto a la corrida. En el portátil se añade además una línea a
+    reproducir/corridas/12_nube/METADATOS.txt, que está versionado; dentro de un trabajo de Slurm
+    no, para que el repositorio del cluster no quede con cambios que estorben a `git pull`."""
+    import socket
     sha = lambda f: hashlib.sha256(open(f, 'rb').read()).hexdigest()
     git = lambda *a: subprocess.run(['git', *a], cwd=RAIZ, capture_output=True, text=True).stdout.strip()
     src = git('log', '-1', '--format=%h', '--', 'src/') + ('+cambios' if git('status', '--porcelain', 'src/') else '')
-    with open(os.path.join(PARDIR, 'METADATOS.txt'), 'a') as fo:
-        fo.write(f'{n:11} {datetime.datetime.now().isoformat(timespec="minutes")}  par {sha(par)[:16]}'
-                 f'  VP_PIC {sha(os.path.join(EXE, "VP_PIC"))[:16]}  src {src}  HEAD {git("rev-parse", "--short", "HEAD")}\n')
+    trabajo = os.environ.get('SLURM_JOB_ID')
+    open(ruta(f'{n}.meta'), 'w').write(
+        f'corrida    {n}\nfecha      {datetime.datetime.now().isoformat(timespec="seconds")}\n'
+        f'VP_PIC     {sha(os.path.join(EXE, "VP_PIC"))}\npar        {sha(par)}  {os.path.relpath(par, RAIZ)}\n'
+        f'HEAD       {git("rev-parse", "--short", "HEAD")}\nsrc/       {src}\n'
+        f'maquina    {socket.gethostname()}, {os.environ.get("VP_HILOS", "4")} hilos, '
+        f'trabajo {trabajo or "sin Slurm"}, {segundos:.0f} s\n')
+    if not trabajo:
+        with open(os.path.join(PARDIR, 'METADATOS.txt'), 'a') as fo:
+            fo.write(f'{n:11} {datetime.datetime.now().isoformat(timespec="minutes")}  par {sha(par)[:16]}'
+                     f'  VP_PIC {sha(os.path.join(EXE, "VP_PIC"))[:16]}  src {src}  HEAD {git("rev-parse", "--short", "HEAD")}\n')
 
 
 def correr(solo=None):
@@ -274,7 +292,7 @@ def correr(solo=None):
         if cod == 0:
             assert abs(dt - DT) < 1e-12, f'el código eligió dt = {dt}, no {DT}'
             open(ruta(f'{n}.ok'), 'w').write('')
-            metadatos(n, os.path.join(PARDIR, f'{n}.par'))
+            metadatos(n, os.path.join(PARDIR, f'{n}.par'), s)
 
 
 class MapaL(MapaAA):
@@ -310,11 +328,12 @@ def _mapear(tarea):
     return sal
 
 
-def analizar(solo=None, procesos=4):
+def analizar(solo=None, procesos=None):
     """Escribe <n>/bulto.npz con las mismas claves que bulto.analizar de vlasov-poisson_PIC, más L:
     t, hk (mapa del potencial del instante), hk_desnudo, phi_self, r, w (masa relativa, f L), L y,
     en precisión simple, R, P, Q, J de cada partícula en cada instantánea."""
     from multiprocessing import Pool
+    procesos = procesos or int(os.environ.get('VP_PROCESOS', '4'))
     for n in CORRIDAS:
         if (solo and n not in solo) or os.path.exists(ruta(n, 'bulto.npz')) or not os.path.exists(ruta(f'{n}.ok')):
             continue
@@ -402,6 +421,32 @@ def por_capas_reducido(nombre):
 def _coherencia(t, h, W):
     total = np.abs((h*W).sum(1))/W.sum(); capa = (np.abs(h)*W).sum(1)/W.sum()
     return t, total, capa, total/capa
+
+
+def resumen(n):
+    """mu (de la oscilación del potencial en la primera vuelta radial, bulto.escalas) y el mayor error
+    relativo de la energía de la corrida n. Se guarda en <n>/resumen.npz."""
+    sal = ruta(n, 'resumen.npz')
+    if not os.path.exists(sal):
+        A, wb, mu = B.escalas(n)
+        e = np.load(ruta(n, 'bulto.npz'))['energia']
+        np.savez(sal, A=A, wb=wb, mu=mu, dE=np.abs(e/e[0] - 1).max())
+    return np.load(sal)
+
+
+def medir(solo=None):
+    """Calcula y guarda las medidas de cada corrida analizada: medidas.npz (plano de zeta), capas.npz
+    (por capas de L), campo.npz (desviación del potencial), resumen.npz (mu y energía) y, con una
+    sola L, nucleo.npz (la elipse de bulto.py). Son los únicos archivos que lee `tabla`."""
+    for n, c in CORRIDAS.items():
+        if (solo and n not in solo) or not os.path.exists(ruta(n, 'bulto.npz')) or os.path.exists(ruta(n, 'resumen.npz')):
+            continue
+        t0 = time.time()
+        medidas(n); por_capas(n); B.campo_particulas(n)
+        if c['nl'] == 1:
+            B.nucleo(n)
+        r = resumen(n)
+        print(f'  medido {n}: mu = {float(r["mu"]):.3f}, |dE/E| <= {float(r["dE"]):.1e} ({time.time()-t0:.0f} s)', flush=True)
 
 
 def numeros(M):
@@ -492,10 +537,10 @@ def tabla():
                 f'{N["rho_c"]:5.2f} {N["m02"]:5.3f} {N["mc"]:5.3f} {N["dr"]:5.3f} {N["acmin"]:7.3f} {N["tmin"]:6.1f} {N["actarde"]:5.3f}')
 
     for n, c in CORRIDAS.items():
-        if not os.path.exists(ruta(n, 'bulto.npz')):
+        if not os.path.exists(ruta(n, 'resumen.npz')):
             continue
         lineas.append(fila(f'{n:11} {c["m"]:5g} {c["sl"]:5g} {c["nl"]:3d} {"PIC":8}', numeros(medidas(n)), por_capas(n))
-                      + f' {campo(n):8.2e} {B.escalas(n)[2]:4.2f}')
+                      + f' {campo(n):8.2e} {float(resumen(n)["mu"]):4.2f}')
         if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '.npz')):
             lineas.append(fila(f'{"":11} {"":5} {"":5} {"":3} {"reducido":8}', numeros(R.diagnosticos(c['red'])), por_capas_reducido(c['red'])))
     open(ruta('tabla.txt'), 'w').write('\n'.join(lineas) + '\n')
@@ -503,22 +548,37 @@ def tabla():
 
 
 def tanda(nombre):
-    """Corre y analiza las corridas de una tanda, una detrás de otra, y rehace la tabla."""
+    """Corre, analiza y mide las corridas de una tanda, una detrás de otra, y rehace la tabla."""
     for n in TANDAS[nombre]:
-        correr([n]); analizar([n])
+        correr([n]); analizar([n]); medir([n])
     tabla()
+
+
+def lista(nombres):
+    """Nombres de las corridas de las tandas o corridas dadas (sin argumentos: todas las tandas)."""
+    sal = []
+    for x in nombres or list(TANDAS):
+        if x not in TANDAS and x not in CORRIDAS:
+            sys.exit(f'no existe la tanda ni la corrida {x}')
+        sal += TANDAS.get(x, [x])
+    print(' '.join(dict.fromkeys(sal)))
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'tanda', 'consistencia', 'tabla', 'reticulas'])
-    ap.add_argument('nombre', nargs='?', choices=list(TANDAS), help='tanda (solo para el paso tanda)')
+    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'tanda', 'lista', 'consistencia',
+                                     'tabla', 'reticulas'])
+    ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
     if a.solo and set(a.solo) - set(CORRIDAS):
         sys.exit('no existen: ' + ', '.join(sorted(set(a.solo) - set(CORRIDAS))))
     if a.paso == 'tanda':
-        tanda(a.nombre or sys.exit('falta el nombre de la tanda: ' + ', '.join(TANDAS)))
+        if len(a.nombres) != 1 or a.nombres[0] not in TANDAS:
+            sys.exit('uso: nube_L.py tanda <' + '|'.join(TANDAS) + '>')
+        tanda(a.nombres[0])
+    elif a.paso == 'lista':
+        lista(a.nombres)
     elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas'):
         globals()[a.paso]()
     else:
