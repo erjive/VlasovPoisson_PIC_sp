@@ -45,8 +45,9 @@ the initial data are missing. Copy them from the laptop, so that both machines s
 same particles (30 MB), with `DEST_SP` the folder of this repository on the cluster:
 
 ```bash
+mkdir -p exe/rep/12_nube/ic                                         # cluster: rsync does not create the folders above ic/
 python3 reproducir/scripts/nube_L.py preparar                       # laptop
-rsync -av exe/rep/12_nube/ic/ $DEST_SP/exe/rep/12_nube/ic/
+rsync -av exe/rep/12_nube/ic/ $DEST_SP/exe/rep/12_nube/ic/          # laptop
 ```
 
 They can also be generated on the cluster with the same command; the particles then agree
