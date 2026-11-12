@@ -50,6 +50,28 @@ de 3.0 s, y el archivo ocupa 86 MB en vez de 55 MB (HDF5 comprime).
 
 Requieren Python 3 con `numpy` (y `h5py` las que leen HDF5).
 
+## La nube fuera de equilibrio con L distribuida
+
+`reproducir/scripts/nube_L.py` repite con este código la nube de `vlasov-poisson_PIC`
+(toda la masa en una fase orbital, con autogravedad) y le añade una dispersión del momento
+angular, exp(-(L-L_0)²/s_L²). Sirve para comprobar la predicción del modelo reducido de
+aquel repositorio: una dispersión de L del orden del 1 % deshace el núcleo denso que queda
+en la órbita circular. Necesita `vlasov-poisson_PIC` junto a este repositorio (o su ruta
+en la variable `VP_PIC_FIJO`), de donde toma las partículas y las medidas.
+
+```bash
+python3 reproducir/scripts/nube_L.py preparar       # condiciones iniciales y reproducir/corridas/12_nube/*.par
+python3 reproducir/scripts/nube_L.py reticulas      # ¿recurre la retícula en L dentro de la corrida?
+python3 reproducir/scripts/nube_L.py tiempo         # costo de cada corrida, medido con 2000 pasos
+reproducir/scripts/nube_L_cadena.sh primera         # corre y analiza una tanda (2 h); también resto y convergencia
+python3 reproducir/scripts/nube_L.py consistencia   # C021 frente a la corrida B021 del código de L fija
+python3 reproducir/scripts/nube_L.py tabla          # medidas del PIC y del modelo reducido
+```
+
+Con L igual y las mismas partículas los dos códigos coinciden: |h_1|(t) a 7e-5 de su
+máximo durante 30 tiempos de mezcla y las medidas tardías a cuatro cifras (corrida `C021`).
+Las corridas con L distribuida están preparadas y no se han corrido (2026-11-12).
+
 ## Video 3D de la DF gaussiana
 
 ```bash

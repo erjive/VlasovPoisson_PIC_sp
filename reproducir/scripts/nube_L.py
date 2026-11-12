@@ -96,10 +96,10 @@ CORRIDAS = {
 }
 # Tandas, en el orden en que conviene correrlas. Costo medido con `tiempo` (corridas) y estimado (análisis).
 TANDAS = {
-    'primera':      ['M030_s000', 'M030_s020', 'M030_s010'],
-    'resto':        ['M030_s040', 'M030_s005', 'M010_s000', 'M010_s020'],
+    # lo esencial: L igual, s_L = 0.02 y 0.01 con la retícula buena, y las dos mismas con las partículas del modelo
+    'primera':      ['M030_s000', 'M030_s020', 'M030_s010', 'M030_s020v', 'M030_s010v'],
+    'resto':        ['M030_s040', 'M030_s005', 'M010_s000', 'M010_s020', 'M030_s040v', 'M030_s005v', 'M010_s020v'],
     'convergencia': ['M030_s020n', 'M030_s020r'],
-    'modelo':       ['M030_s020v', 'M030_s010v', 'M030_s040v', 'M030_s005v', 'M010_s020v'],
 }
 
 
