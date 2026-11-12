@@ -404,18 +404,9 @@ def por_capas(n):
 
 
 def por_capas_reducido(nombre):
-    """Lo mismo para una corrida del modelo reducido."""
-    d = np.load(os.path.join(R.DATOS, nombre + '.npz'))
-    t, m = d['t'], d['m']
-    L = d['L'] if 'L' in d.files and len(d['L']) == len(m) else np.full(len(m), L0)   # corridas de L igual
-    v, inv = np.unique(L, return_inverse=True)
-    W = np.bincount(inv, weights=m)
-    h = np.empty((len(t), len(v)), complex)
-    for k in range(len(t)):
-        z = d['X'][k].astype(float) + 1j*d['Y'][k].astype(float)
-        e = np.conj(z)/(np.abs(z) + 1e-300)
-        h[k] = (np.bincount(inv, weights=m*e.real) + 1j*np.bincount(inv, weights=m*e.imag))/W
-    return _coherencia(t, h, W)
+    """Lo mismo para una corrida del modelo reducido (reducido.capas); None si no está."""
+    d = R.capas(nombre)
+    return None if d is None else _coherencia(d['t'], d['h'], d['W'])
 
 
 def _coherencia(t, h, W):
@@ -532,8 +523,12 @@ def tabla():
               f'{"rho_c":>5} {"m02":>5} {"m_c":>5} {"dr":>5} {"a_c min":>7} {"t/tau1":>6} {"a_c":>5} {"D":>8} {"mu":>4}']
 
     def fila(nombre, N, capas):
-        t, tot, capa, coh = capas
-        return (f'{nombre} {N["h1"]:8.2e} {N["h1t"]:8.2e} {capa[v(t)].mean():8.2e} {capa[u(t)].mean():8.2e} {coh[v(t)].mean():5.2f} {coh[u(t)].mean():5.2f} '
+        if capas is None:
+            pc = f'{"-":>8} {"-":>8} {"-":>5} {"-":>5}'
+        else:
+            t, tot, capa, coh = capas
+            pc = f'{capa[v(t)].mean():8.2e} {capa[u(t)].mean():8.2e} {coh[v(t)].mean():5.2f} {coh[u(t)].mean():5.2f}'
+        return (f'{nombre} {N["h1"]:8.2e} {N["h1t"]:8.2e} {pc} '
                 f'{N["rho_c"]:5.2f} {N["m02"]:5.3f} {N["mc"]:5.3f} {N["dr"]:5.3f} {N["acmin"]:7.3f} {N["tmin"]:6.1f} {N["actarde"]:5.3f}')
 
     for n, c in CORRIDAS.items():
@@ -541,7 +536,7 @@ def tabla():
             continue
         lineas.append(fila(f'{n:11} {c["m"]:5g} {c["sl"]:5g} {c["nl"]:3d} {"PIC":8}', numeros(medidas(n)), por_capas(n))
                       + f' {campo(n):8.2e} {float(resumen(n)["mu"]):4.2f}')
-        if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '.npz')):
+        if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '_diag.npz')):
             lineas.append(fila(f'{"":11} {"":5} {"":5} {"":3} {"reducido":8}', numeros(R.diagnosticos(c['red'])), por_capas_reducido(c['red'])))
     open(ruta('tabla.txt'), 'w').write('\n'.join(lineas) + '\n')
     print('\n'.join(lineas))

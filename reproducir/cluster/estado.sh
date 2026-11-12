@@ -25,5 +25,16 @@ for n in $corridas; do
   err=$(cat "$NUBE"/slurm_${n}_*.err 2>/dev/null | grep -v -i warn | tail -1)
   printf "%-12s %-10s %-28s %6s  %s\n" "$n" "$e" "${s:--}" "${d:--}" "$err"
 done
+echo "== modelo reducido (series Lb y control)"
+ult=$(ls -t "$FIJO"/log.reducido.*.out 2>/dev/null | head -1)
+if [ -n "$ult" ]; then
+  echo "${ult#$FIJO/}:"
+  grep -E "^(inicio|fin|== serie|OK |FALTA|medidas de)" "$ult" | tail -n 20
+  tail -n 1 "$ult"
+  err="${ult%.out}.err"
+  [ -s "$err" ] && { echo "${err#$FIJO/} (últimas líneas):"; tail -n 5 "$err"; }
+else
+  echo "sin salida todavía"
+fi
 echo "== tabla"
 python3 reproducir/scripts/nube_L.py tabla 2>&1 | tail -n +6
