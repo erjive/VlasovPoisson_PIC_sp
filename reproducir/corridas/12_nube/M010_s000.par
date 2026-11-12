@@ -1,0 +1,34 @@
+# Nube M010_s000: F_0(Q, J) con s_Q = s_J = 0.1 por exp(-(L - 2)^2/s_L^2), s_L = 0,
+# M_gas = 0.01, retícula 200 x 50 recortada (150 x 14) por N_L = 1:
+# 2100 partículas, N_ef = 223. Generado por reproducir/scripts/nube_L.py.
+state            = checkpoint
+CheckPointfile   = rep/12_nube/ic/M010_s000.dat
+Nrc              = 150
+Npc              = 14
+Nlc              = 1
+a0               = 0.01
+l0               = 2.0
+sl               = 0.5
+sr               = 0.1
+sp               = 0.1
+lminc            = 1.5
+lmaxc            = 2.5
+rminc            = 3.0
+rmaxc            = 14.0
+pminc            = -0.25
+pmaxc            = 0.25
+dr               = 0.1
+rmin             = 0.0
+rmax             = 20.0
+pmax             = 2.0
+courant          = 1.0
+Nt               = 200000
+integrator       = yoshida4
+bsplineorder     = 1
+BGtype           = Isochrone
+autointeraction  = .true.
+spatial_output   = 200
+field_output     = 200
+time_output      = 20000
+output_format    = raw
+directory        = rep/12_nube/M010_s000
