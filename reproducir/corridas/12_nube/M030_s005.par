@@ -1,18 +1,18 @@
 # Nube M030_s005: F_0(Q, J) con s_Q = s_J = 0.1 por exp(-(L - 2)^2/s_L^2), s_L = 0.005,
-# M_gas = 0.03, retícula 200 x 50 recortada (150 x 14) por N_L = 4:
-# 8400 partículas, N_ef = 565. Generado por reproducir/scripts/nube_L.py.
+# M_gas = 0.03, retícula 200 x 50 recortada (150 x 14) por N_L = 8 en |L - 2| <= 2.5 s_L:
+# 16800 partículas, N_ef = 894. Generado por reproducir/scripts/nube_L.py.
 state            = checkpoint
 CheckPointfile   = rep/12_nube/ic/M030_s005.dat
 Nrc              = 150
 Npc              = 14
-Nlc              = 4
+Nlc              = 8
 a0               = 0.03
 l0               = 2.0
 sl               = 0.005
 sr               = 0.1
 sp               = 0.1
-lminc            = 1.99
-lmaxc            = 2.01
+lminc            = 1.9875
+lmaxc            = 2.0125
 rminc            = 3.0
 rmaxc            = 14.0
 pminc            = -0.25

@@ -8,18 +8,30 @@ repositorio (reproducir/scripts/reducido.py, docs/modelo_reducido) predice que u
 del orden del 1 % deshace el núcleo. Aquí se comprueba con este código.
 
 Las partículas son las del modelo reducido: la retícula de puntos medios en (Q, J) recortada donde
-el peso baja de 1e-7 de su máximo, repetida en N_L puntos medios de |L - L_0| <= 2 s_L. Entran con
-state = checkpoint. Las medidas son las del modelo reducido (reducido.medidas_plano), tomadas en el
-plano de zeta = sqrt(2J) exp(iQ) con las variables de ángulo-acción del potencial de cada instante
-y la L de cada partícula. Las de bulto.py en el plano (r, p_r) solo valen con L igual: con L
-distribuida cada partícula oscila alrededor de su propio radio R(L).
+el peso baja de 1e-7 de su máximo, repetida en N_L puntos medios de |L - L_0| <= ancho s_L. Entran
+con state = checkpoint. Las medidas son las del modelo reducido (reducido.medidas_plano), tomadas en
+el plano de zeta = sqrt(2J) exp(iQ) con las variables de ángulo-acción del potencial de cada
+instante y la L de cada partícula. Las de bulto.py en el plano (r, p_r) solo valen con L igual: con
+L distribuida cada partícula oscila alrededor de su propio radio R(L).
+
+La retícula en L. Las N_L capas vuelven a estar en fase en t_rec = 2 pi/(|dOmega/dL| dL), con dL el
+paso de la retícula, y esa recurrencia se nota desde mucho antes: desde t_rec - 70/s_L para una
+coherencia de 1e-3. Las corridas del modelo reducido del 2026-11-11 (N_L = 4, 6, 10 y 20 puntos en
+|L - L_0| <= 2 s_L, t_rec = 10417 para s_L = 0.02 y 0.04) están afectadas a partir de unas 20 tau_1:
+la suma libre de las capas, que para una gaussiana continua sigue cayendo, llega a 0.4 (s_L = 0.01),
+0.9 (0.02) y 0.7 (0.04) al final de la corrida. coherencia_libre() lo calcula. Las corridas de
+esta serie usan |L - L_0| <= 2.5 s_L y N_L = 8, 12, 20 y 30, con las que la suma libre no se aparta
+de la continua más de 7e-4 en toda la corrida. Las que terminan en v repiten las retículas del
+2026-11-11, para comparar con aquellas corridas del modelo partícula a partícula.
 
     python3 nube_L.py preparar                  condiciones iniciales y .par
     python3 nube_L.py tiempo [--solo ...]       corrida corta de cada caso y costo estimado
     python3 nube_L.py correr [--solo ...]       lo que falte, una corrida detrás de otra, 4 hilos
     python3 nube_L.py analizar [--solo ...]     mapa (Q, J) de cada instantánea y medidas
+    python3 nube_L.py tanda <nombre>            corre y analiza una tanda (TANDAS), en orden
     python3 nube_L.py consistencia              C021 frente a la corrida B021 de vlasov-poisson_PIC
     python3 nube_L.py tabla                     medidas frente al modelo reducido
+    python3 nube_L.py reticulas                 coherencia libre de la retícula en L de cada corrida
 
 Necesita el repositorio vlasov-poisson_PIC junto a este (o en la variable VP_PIC_FIJO): de él salen
 la retícula, las medidas y las corridas con las que se compara. Todo queda en exe/rep/12_nube/.
@@ -49,26 +61,45 @@ BASE = os.path.join(EXE, 'rep', GRUPO)
 PARDIR = os.path.join(RAIZ, 'reproducir', 'corridas', GRUPO)
 FIJO_BULTO = B.BASE                             # corridas de L fija: vlasov-poisson_PIC/exe/demo_eta/bulto
 B.BASE = BASE                                   # las medidas de bulto.py, sobre las corridas de esta serie
-L0, SJ, SQ, ANCHO = 2.0, 0.1, 0.1, 2.0
+L0, SJ, SQ = 2.0, 0.1, 0.1
 TFIN, DT, SALIDA = 10000, 0.05, 200
 TAU1, KAPPA = B.TAU1, R.KAPPA
 TS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 20, 25, 30]
 
-# nombre: masa del gas, retícula completa (N_J, N_Q), puntos y anchura en L, corrida del modelo
-# reducido y corrida de L fija con las que se compara.
+# nombre: masa del gas, retícula completa (N_J, N_Q), puntos, anchura s_L y semiancho (en s_L) de la
+# retícula en L, corrida del modelo reducido y corrida de L fija con las que se compara, y cambios
+# en el .par.
+def _c(m, nl, sl, red=None, fijo=None, ancho=2.5, nj=200, nq=50, **cambios):
+    return dict(m=m, nj=nj, nq=nq, nl=nl, sl=sl, ancho=ancho, red=red, fijo=fijo, cambios=cambios)
+
+
 CORRIDAS = {
     # Consistencia entre los dos códigos: las partículas de B021, todas con L = L_0.
-    'C021':       dict(m=0.021, nj=400, nq=100, nl=1,  sl=0.0,   red='R021',       fijo='B021'),
-    # Barrido en s_L con la retícula de 200 x 50 del modelo reducido (150 x 14 tras el recorte).
-    'M030_s000':  dict(m=0.03,  nj=200, nq=50,  nl=1,  sl=0.0,   red='rL0_0.03',   fijo=None),
-    'M030_s005':  dict(m=0.03,  nj=200, nq=50,  nl=4,  sl=0.005, red='rL005_0.03', fijo=None),
-    'M030_s010':  dict(m=0.03,  nj=200, nq=50,  nl=6,  sl=0.01,  red='rL010_0.03', fijo=None),
-    'M030_s020':  dict(m=0.03,  nj=200, nq=50,  nl=10, sl=0.02,  red='rL020_0.03', fijo=None),
-    'M030_s040':  dict(m=0.03,  nj=200, nq=50,  nl=20, sl=0.04,  red='rL040_0.03', fijo=None),
-    'M010_s000':  dict(m=0.01,  nj=200, nq=50,  nl=1,  sl=0.0,   red='rL0_0.01',   fijo=None),
-    'M010_s020':  dict(m=0.01,  nj=200, nq=50,  nl=10, sl=0.02,  red='rL020_0.01', fijo=None),
-    # Convergencia en N_L.
-    'M030_s020n': dict(m=0.03,  nj=200, nq=50,  nl=20, sl=0.02,  red=None,         fijo=None),
+    'C021':        _c(0.021, 1, 0.0, 'R021', 'B021', nj=400, nq=100),
+    # Barrido en s_L con la retícula de 200 x 50 en (Q, J) (150 x 14 tras el recorte).
+    'M030_s000':   _c(0.03, 1,  0.0,   'rL0_0.03'),
+    'M030_s005':   _c(0.03, 8,  0.005, 'rL005b_0.03'),
+    'M030_s010':   _c(0.03, 12, 0.01,  'rL010b_0.03'),
+    'M030_s020':   _c(0.03, 20, 0.02,  'rL020b_0.03'),
+    'M030_s040':   _c(0.03, 30, 0.04,  'rL040b_0.03'),
+    'M010_s000':   _c(0.01, 1,  0.0,   'rL0_0.01'),
+    'M010_s020':   _c(0.01, 20, 0.02,  'rL020b_0.01'),
+    # Convergencia de s_L = 0.02: más puntos en L, y mitad del paso radial con el mismo paso de tiempo.
+    'M030_s020n':  _c(0.03, 30, 0.02),
+    'M030_s020r':  _c(0.03, 20, 0.02, dr=0.05, courant=2.0),
+    # Las retículas en L del modelo reducido del 2026-11-11 (afectadas por la recurrencia; ver arriba).
+    'M030_s005v':  _c(0.03, 4,  0.005, 'rL005_0.03', ancho=2.0),
+    'M030_s010v':  _c(0.03, 6,  0.01,  'rL010_0.03', ancho=2.0),
+    'M030_s020v':  _c(0.03, 10, 0.02,  'rL020_0.03', ancho=2.0),
+    'M030_s040v':  _c(0.03, 20, 0.04,  'rL040_0.03', ancho=2.0),
+    'M010_s020v':  _c(0.01, 10, 0.02,  'rL020_0.01', ancho=2.0),
+}
+# Tandas, en el orden en que conviene correrlas. Costo medido con `tiempo` (corridas) y estimado (análisis).
+TANDAS = {
+    'primera':      ['M030_s000', 'M030_s020', 'M030_s010'],
+    'resto':        ['M030_s040', 'M030_s005', 'M010_s000', 'M010_s020'],
+    'convergencia': ['M030_s020n', 'M030_s020r'],
+    'modelo':       ['M030_s020v', 'M030_s010v', 'M030_s040v', 'M030_s005v', 'M010_s020v'],
 }
 
 
@@ -101,10 +132,43 @@ def particulas(n):
         Q, J, f = R.reticula(c['nj'], c['nq'], sj=SJ, sq=SQ)
         L = np.full_like(Q, L0)
     else:
-        Q, J, L, w = R.reticula_L(c['nj'], c['nq'], c['nl'], c['sl'], L0, ANCHO, sj=SJ, sq=SQ)
+        Q, J, L, w = R.reticula_L(c['nj'], c['nq'], c['nl'], c['sl'], L0, c['ancho'], sj=SJ, sq=SQ)
         f = w/L
     r, p = isocrono_rp(Q, J, L)
     return Q, J, L, f, r, p
+
+
+def capas_L(n):
+    """Valores de L de la retícula de la corrida n y su peso (masa relativa de cada capa)."""
+    c = CORRIDAS[n]
+    if c['nl'] == 1:
+        return np.array([L0]), np.array([1.0])
+    Ln = L0 + c['ancho']*c['sl']*(2*(np.arange(c['nl']) + 0.5)/c['nl'] - 1.0)
+    return Ln, np.exp(-(Ln - L0)**2/c['sl']**2)*Ln
+
+
+def coherencia_libre(Ln, w, t, J=0.0):
+    """|sum_l w_l exp(-i Omega(J, L_l) t)|/sum_l w_l: lo que queda de la suma de las capas en la mezcla
+    libre. Para una gaussiana continua es exp(-(dOmega/dL s_L t)^2/4); con N_L capas vuelve a 1 en t_rec."""
+    om = (J + R.c_de_L(Ln))**-3
+    return np.abs((w[None, :]*np.exp(-1j*om[None, :]*np.asarray(t, float)[:, None])).sum(1))/w.sum()
+
+
+def reticulas():
+    """Para cada corrida con L distribuida: paso de la retícula, t_rec y la mayor diferencia, hasta el
+    final de la corrida, entre la coherencia libre de la retícula y la de la gaussiana continua."""
+    t = np.linspace(0, TFIN, 4001); h = 1e-5
+    dOdL = abs((R.c_de_L(L0 + h))**-3 - (R.c_de_L(L0 - h))**-3)/(2*h)
+    print(f'|dOmega/dL| = {dOdL:.4f} en J = 0; fin de las corridas en t/tau_1 = {TFIN/TAU1:.1f}')
+    for n, c in CORRIDAS.items():
+        if c['nl'] == 1:
+            continue
+        Ln, w = capas_L(n); dL = Ln[1] - Ln[0]
+        fino = L0 + 6*c['sl']*(2*(np.arange(600) + 0.5)/600 - 1.0); wf = np.exp(-(fino - L0)**2/c['sl']**2)*fino
+        dif = [np.abs(coherencia_libre(Ln, w, t, J) - coherencia_libre(fino, wf, t, J)) for J in (0.0, SJ)]
+        tarde = t >= 20*TAU1
+        print(f'{n:11} s_L = {c["sl"]:5.3f}  N_L = {c["nl"]:2d} en ±{c["ancho"]:g} s_L  dL = {dL:.5f}  t_rec = {2*np.pi/dOdL/dL/TAU1:5.1f} tau_1'
+              f'  max |S - S_gauss|: {max(d.max() for d in dif):.1e} (hasta 20 tau_1: {max(d[~tarde].max() for d in dif):.1e})')
 
 
 def forma(n):
@@ -137,16 +201,21 @@ def preparar():
         v = [('state', 'checkpoint'), ('CheckPointfile', f'rep/{GRUPO}/ic/{n}.dat'),
              ('Nrc', nrc), ('Npc', npc), ('Nlc', nlc), ('a0', c['m']),
              ('l0', L0), ('sl', c['sl'] if c['nl'] > 1 else 0.5), ('sr', SJ), ('sp', SQ),
-             ('lminc', L0 - ANCHO*sl), ('lmaxc', L0 + ANCHO*sl),
+             ('lminc', L0 - (c['ancho'] if c['nl'] > 1 else 2.0)*sl), ('lmaxc', L0 + (c['ancho'] if c['nl'] > 1 else 2.0)*sl),
              ('rminc', 3.0), ('rmaxc', 14.0), ('pminc', -0.25), ('pmaxc', 0.25),
              ('dr', 0.1), ('rmin', 0.0), ('rmax', 20.0), ('pmax', 2.0), ('courant', 1.0),
              ('Nt', int(round(TFIN/DT))), ('integrator', 'yoshida4'), ('bsplineorder', 1),
              ('BGtype', 'Isochrone'), ('autointeraction', '.true.'),
              ('spatial_output', SALIDA), ('field_output', SALIDA), ('time_output', 100*SALIDA),
              ('output_format', 'raw'), ('directory', f'rep/{GRUPO}/{n}')]
+        v = [(k, c['cambios'].get(k, x)) for k, x in v]
+        assert not set(c['cambios']) - {k for k, _ in v}
         cab = [f'# Nube {n}: F_0(Q, J) con s_Q = s_J = {SJ} por exp(-(L - {L0:g})^2/s_L^2), s_L = {c["sl"]:g},',
-               f'# M_gas = {c["m"]:g}, retícula {c["nj"]} x {c["nq"]} recortada ({nrc} x {npc}) por N_L = {nlc}:',
+               f'# M_gas = {c["m"]:g}, retícula {c["nj"]} x {c["nq"]} recortada ({nrc} x {npc}) por N_L = {nlc}'
+               + (f' en |L - {L0:g}| <= {c["ancho"]:g} s_L:' if nlc > 1 else ':'),
                f'# {len(r)} partículas, N_ef = {nef:.0f}. Generado por reproducir/scripts/nube_L.py.']
+        if c['cambios']:
+            cab.append('# Cambios: ' + ', '.join(f'{k} = {x}' for k, x in c['cambios'].items()) + '.')
         open(os.path.join(PARDIR, f'{n}.par'), 'w').write('\n'.join(cab + [f'{k:<16} = {x}' for k, x in v]) + '\n')
         print(f'{n:11} {len(r):6d} partículas ({nrc} x {npc} x {nlc}), N_ef = {nef:6.0f}; ida y vuelta del mapa:'
               f' |dQ| <= {eq:.1e}, |dJ| <= {ej:.1e}{nota}')
@@ -211,12 +280,18 @@ def correr(solo=None):
 class MapaL(MapaAA):
     """MapaAA con el radio de la órbita circular calculado una vez por cada valor distinto de L. Las
     partículas de esta serie tienen N_L valores de L, y la bisección por partícula era la cuarta parte
-    del costo del mapa. El resultado es el mismo bit a bit."""
+    del costo del mapa. El resultado es el mismo bit a bit que el de MapaAA."""
 
     def r_circular(self, L, it=100):
         L = np.asarray(L, float)
         v, inv = np.unique(L, return_inverse=True)
         return MapaAA.r_circular(self, v, it)[inv].reshape(L.shape)
+
+    def _raiz(self, E, L, a, b, it=60):
+        """60 bisecciones en vez de 80: el intervalo inicial mide menos de 80 y tras 60 mitades queda por
+        debajo de la separación entre dos números de máquina, así que las 20 restantes no cambian nada
+        (comprobado bit a bit sobre 42000 partículas en tres instantáneas)."""
+        return MapaAA._raiz(self, E, L, a, b, it)
 
 
 def _mapear(tarea):
@@ -287,6 +362,46 @@ def plano(npz, sal):
 
 def medidas(n):
     return plano(ruta(n, 'bulto.npz'), ruta(n, 'medidas.npz'))
+
+
+def por_capas(n):
+    """Primer armónico de cada capa de L, h_l(t) = sum_{i en l} m_i exp(-i Q_i)/sum_{i en l} m_i, del PIC.
+    Devuelve t, |h_1| total, la media de |h_l| sobre las capas (pesada con su masa) y su cociente, la
+    coherencia entre capas: 1 si todas oscilan en fase, ~N_ef^(-1/2) con fases al azar y menos si se
+    abren en abanico. Se guarda en <n>/capas.npz."""
+    sal = ruta(n, 'capas.npz')
+    if not os.path.exists(sal):
+        d = np.load(ruta(n, 'bulto.npz'))
+        t, w, L = d['t'], np.asarray(d['w'], float), d['L']; Q = d['Q']
+        v, inv = np.unique(L, return_inverse=True)
+        W = np.bincount(inv, weights=w)
+        h = np.empty((len(t), len(v)), complex)
+        for k in range(len(t)):
+            e = np.exp(-1j*Q[k].astype(float)); e[~np.isfinite(e)] = 0.0
+            h[k] = (np.bincount(inv, weights=w*e.real) + 1j*np.bincount(inv, weights=w*e.imag))/W
+        np.savez(sal, t=t, L=v, W=W, h=h)
+    d = np.load(sal)
+    return _coherencia(d['t'], d['h'], d['W'])
+
+
+def por_capas_reducido(nombre):
+    """Lo mismo para una corrida del modelo reducido."""
+    d = np.load(os.path.join(R.DATOS, nombre + '.npz'))
+    t, m = d['t'], d['m']
+    L = d['L'] if 'L' in d.files and len(d['L']) == len(m) else np.full(len(m), L0)   # corridas de L igual
+    v, inv = np.unique(L, return_inverse=True)
+    W = np.bincount(inv, weights=m)
+    h = np.empty((len(t), len(v)), complex)
+    for k in range(len(t)):
+        z = d['X'][k].astype(float) + 1j*d['Y'][k].astype(float)
+        e = np.conj(z)/(np.abs(z) + 1e-300)
+        h[k] = (np.bincount(inv, weights=m*e.real) + 1j*np.bincount(inv, weights=m*e.imag))/W
+    return _coherencia(t, h, W)
+
+
+def _coherencia(t, h, W):
+    total = np.abs((h*W).sum(1))/W.sum(); capa = (np.abs(h)*W).sum(1)/W.sum()
+    return t, total, capa, total/capa
 
 
 def numeros(M):
@@ -361,33 +476,50 @@ def consistencia(n='C021'):
 
 def tabla():
     """Medidas de cada corrida frente al modelo reducido: exe/rep/12_nube/tabla.txt."""
-    lineas = ['Nube con L distribuida: PIC (VlasovPoisson_PIC_sp) y modelo reducido. |h_1| medio en 10-20 tau_1; rho_c, m02 y dr',
-              'medios en t >= 20 tau_1; m_c media en t >= 20 tau_1; a_c: mínimo de la envolvente en 2-30 tau_1 (y cuándo) y media',
-              'en t >= 25 tau_1; D media en 10-20 tau_1. sigma_L = s_L/sqrt(2).',
-              f'{"corrida":11} {"M_gas":>6} {"s_L":>6} {"N_L":>3} {"":8} {"|h_1|":>9} {"rho_c":>6} {"m02":>6} {"m_c":>6} {"dr":>6} '
-              f'{"a_c min":>8} {"t/tau_1":>7} {"a_c tarde":>9} {"D":>9} {"mu":>5}']
+    v = lambda t: (t >= 10*TAU1) & (t <= 20*TAU1)
+    u = lambda t: t >= 20*TAU1
+    lineas = ['Nube con L distribuida: PIC (VlasovPoisson_PIC_sp) y modelo reducido. sigma_L = s_L/sqrt(2).',
+              '|h_1|: media en 10-20 tau_1 y en t >= 20 tau_1. capa: media sobre las capas de L del |h_1| de cada una, y coh: cociente',
+              'entre el |h_1| total y esa media (1: capas en fase), las dos en 10-20 y en t >= 20 tau_1. rho_c, m02 y dr: medias en',
+              't >= 20 tau_1; m_c: media en t >= 20 tau_1. a_c: mínimo de la envolvente en 2-30 tau_1 (y cuándo) y media en t >= 25 tau_1.',
+              'D: media en 10-20 tau_1.',
+              f'{"corrida":11} {"M_gas":>5} {"s_L":>5} {"N_L":>3} {"":8} {"|h_1|":>8} {"tarde":>8} {"capa":>8} {"tarde":>8} {"coh":>5} {"tarde":>5} '
+              f'{"rho_c":>5} {"m02":>5} {"m_c":>5} {"dr":>5} {"a_c min":>7} {"t/tau1":>6} {"a_c":>5} {"D":>8} {"mu":>4}']
+
+    def fila(nombre, N, capas):
+        t, tot, capa, coh = capas
+        return (f'{nombre} {N["h1"]:8.2e} {N["h1t"]:8.2e} {capa[v(t)].mean():8.2e} {capa[u(t)].mean():8.2e} {coh[v(t)].mean():5.2f} {coh[u(t)].mean():5.2f} '
+                f'{N["rho_c"]:5.2f} {N["m02"]:5.3f} {N["mc"]:5.3f} {N["dr"]:5.3f} {N["acmin"]:7.3f} {N["tmin"]:6.1f} {N["actarde"]:5.3f}')
+
     for n, c in CORRIDAS.items():
         if not os.path.exists(ruta(n, 'bulto.npz')):
             continue
-        N = numeros(medidas(n))
-        lineas.append(f'{n:11} {c["m"]:6g} {c["sl"]:6g} {c["nl"]:3d} {"PIC":8} {N["h1"]:9.2e} {N["rho_c"]:6.2f} {N["m02"]:6.3f} {N["mc"]:6.3f} '
-                      f'{N["dr"]:6.3f} {N["acmin"]:8.3f} {N["tmin"]:7.1f} {N["actarde"]:9.3f} {campo(n):9.2e} {B.escalas(n)[2]:5.2f}')
+        lineas.append(fila(f'{n:11} {c["m"]:5g} {c["sl"]:5g} {c["nl"]:3d} {"PIC":8}', numeros(medidas(n)), por_capas(n))
+                      + f' {campo(n):8.2e} {B.escalas(n)[2]:4.2f}')
         if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '.npz')):
-            N = numeros(R.diagnosticos(c['red']))
-            lineas.append(f'{"":11} {"":6} {"":6} {"":3} {"reducido":8} {N["h1"]:9.2e} {N["rho_c"]:6.2f} {N["m02"]:6.3f} {N["mc"]:6.3f} '
-                          f'{N["dr"]:6.3f} {N["acmin"]:8.3f} {N["tmin"]:7.1f} {N["actarde"]:9.3f}')
+            lineas.append(fila(f'{"":11} {"":5} {"":5} {"":3} {"reducido":8}', numeros(R.diagnosticos(c['red'])), por_capas_reducido(c['red'])))
     open(ruta('tabla.txt'), 'w').write('\n'.join(lineas) + '\n')
     print('\n'.join(lineas))
 
 
+def tanda(nombre):
+    """Corre y analiza las corridas de una tanda, una detrás de otra, y rehace la tabla."""
+    for n in TANDAS[nombre]:
+        correr([n]); analizar([n])
+    tabla()
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'consistencia', 'tabla'])
+    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'tanda', 'consistencia', 'tabla', 'reticulas'])
+    ap.add_argument('nombre', nargs='?', choices=list(TANDAS), help='tanda (solo para el paso tanda)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
     if a.solo and set(a.solo) - set(CORRIDAS):
         sys.exit('no existen: ' + ', '.join(sorted(set(a.solo) - set(CORRIDAS))))
-    if a.paso in ('preparar', 'consistencia', 'tabla'):
+    if a.paso == 'tanda':
+        tanda(a.nombre or sys.exit('falta el nombre de la tanda: ' + ', '.join(TANDAS)))
+    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas'):
         globals()[a.paso]()
     else:
         globals()[a.paso](a.solo)

@@ -44,3 +44,6 @@ docs/introduccion/*.fls
 docs/introduccion/*.fdb_latexmk
 docs/introduccion/*.toc
 docs/introduccion/*.out
+
+# Python
+__pycache__/
