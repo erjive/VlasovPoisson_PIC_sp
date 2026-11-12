@@ -25,13 +25,17 @@ All commands are given from the root of the repository.
 
 ## 1. First time
 
-On the login node, with `vlasov-poisson_PIC` already there:
+On the login node, clone both repositories, on the branches of this work, into a new folder
+(110 MB in all). A copy of `vlasov-poisson_PIC` that is already on the cluster can be used
+instead, but it must be on the branch `notas/mezcla-fuera-equilibrio`, and switching a copy
+whose `exe/VP_PIC` was rebuilt there may require `git stash` first; new clones avoid that and
+leave the old copy and its runs alone.
 
 ```bash
-cd <folder that contains vlasov-poisson_PIC>
-git clone https://github.com/erjive/VlasovPoisson_PIC_sp.git
-cd VlasovPoisson_PIC_sp && git checkout mejoras/portar
-(cd ../vlasov-poisson_PIC && git fetch && git checkout notas/mezcla-fuera-equilibrio && git pull)
+mkdir -p <new folder> && cd <new folder>
+git clone -b notas/mezcla-fuera-equilibrio https://github.com/erjive/vlasov-poisson_PIC.git
+git clone -b mejoras/portar https://github.com/erjive/VlasovPoisson_PIC_sp.git
+cd VlasovPoisson_PIC_sp
 bash reproducir/cluster/compilar.sh
 ```
 
