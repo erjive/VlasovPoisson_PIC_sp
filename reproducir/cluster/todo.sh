@@ -27,7 +27,9 @@ if ! command -v sbatch > /dev/null 2>&1; then
 fi
 opc=(); [ $seco = 1 ] && opc=(-n)
 cd "$RAIZ" || exit 1
-corridas=$(python3 reproducir/scripts/nube_L.py lista) || { echo "ALTO: nube_L.py no carga"; echo "$corridas"; exit 1; }
+# Si Python no carga nube_L.py se compila de todos modos, para saber también si eso funciona.
+err_py=$(mktemp)
+if corridas=$(python3 reproducir/scripts/nube_L.py lista 2> "$err_py"); then py_bien=1; else py_bien=0; corridas=""; fi
 echo "inicio: $(date)   máquina: $(hostname)   partición: $VP_PARTICION   HEAD: $(git rev-parse --short HEAD)   vlasov-poisson_PIC: $(cd "$FIJO" && git rev-parse --short HEAD)"
 
 echo; echo "== 1. compilación y prueba"
@@ -38,8 +40,16 @@ fi
 if [ -n "$encola" ]; then
   echo "hay trabajos de esta serie en la cola ($(echo $encola)): no se recompila"
 else
-  bash reproducir/cluster/compilar.sh || { echo "ALTO: falló la compilación o la prueba"; exit 1; }
+  bash reproducir/cluster/compilar.sh || comp_mal=1
 fi
+if [ $py_bien = 0 ]; then
+  echo; echo "ALTO: $(command -v python3 || echo 'no hay python3') ($(python3 --version 2>&1)) no carga nube_L.py:"
+  tail -n 6 "$err_py"
+  echo "Hacen falta numpy y scipy: ver la sección Python de diagnostico.txt y los módulos de entorno.sh."
+  rm -f "$err_py"; exit 1
+fi
+rm -f "$err_py"
+[ -z "${comp_mal:-}" ] || { echo "ALTO: falló la compilación o la prueba"; exit 1; }
 
 echo; echo "== 2. datos iniciales"
 faltan=$(for n in $corridas; do [ -f "$NUBE/ic/$n.dat" ] || echo $n; done)
