@@ -658,8 +658,8 @@ def figura():
     estilos = ['-', '--', ':', '-.']
     fig, ax = plt.subplots(1, 3, figsize=(10, 3.4))
     paneles = (('h1', 'h1_m', r'$|h_1|/h_0$, mean over $10\leq t/\tau_1\leq 20$', True, None),
-               ('mc', 'mc_m', r'mass fraction of the core', False, (0.042, 'mixed gas')),
-               ('rho', 'rho_m', r'density at the circular orbit, $\hat\rho_c$', True, (1.0, 'bound of mixing')))
+               ('mc', 'mc_m', r'mass fraction of the core', False, (0.042, 'mixed gas', 0.38)),
+               ('rho', 'rho_m', r'density at the circular orbit, $\hat\rho_c$', True, (1.0, 'bound of mixing', 0.02)))
     for a, (k, km, titulo, log, cota) in zip(ax, paneles):
         for m, ls in zip(masas, estilos):
             F = sorted(datos[m], key=lambda f: f['x'])
@@ -672,8 +672,9 @@ def figura():
                 a.plot(x, [f['capa'] for f in F], color=c_pic, lw=0.9, ls=(0, (1, 1.5)), marker='o', ms=3.2, mfc=sup, mec=c_pic, mew=0.7)
         if cota:
             a.axhline(cota[0], color=tinta2, lw=0.8, ls=(0, (4, 3)), zorder=0)
-            a.annotate(cota[1], (1.0, cota[0]), xycoords=('axes fraction', 'data'), xytext=(-2, 3), textcoords='offset points',
-                       ha='right', fontsize=8, color=tinta2)
+            # el rótulo va donde no hay curvas: cota[2] es su posición en fracción del eje x
+            a.annotate(cota[1], (cota[2], cota[0]), xycoords=('axes fraction', 'data'), xytext=(0, 3), textcoords='offset points',
+                       ha='left', fontsize=8, color=tinta2)
         if log:
             a.set_yscale('log')
         else:
