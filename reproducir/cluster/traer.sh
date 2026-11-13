@@ -5,7 +5,7 @@
 #   reproducir/cluster/traer.sh [-o origen] [-r] [-g] [-f] [-n] [<tanda o corrida> ...]
 #
 # origen   este repositorio en el cluster, usuario@máquina:/ruta (o la variable VP_CLUSTER_SP).
-# -r       trae también las medidas del modelo reducido de las series Lb y control
+# -r       trae también las medidas del modelo reducido de las series de "nube_L.py modelo"
 #          (<corrida>_diag.npz y <corrida>_capas.npz), de la copia de vlasov-poisson_PIC que está
 #          junto a esta en el cluster (o en la variable VP_CLUSTER_FIJO) a la del portátil. Nunca
 #          pisa un archivo del portátil.
@@ -57,9 +57,7 @@ fi
 if [ $modelo = 1 ]; then
   fijo="${VP_PIC_FIJO:-$(dirname "$RAIZ")/vlasov-poisson_PIC}"
   origen_fijo="${VP_CLUSTER_FIJO:-${origen%/*}/vlasov-poisson_PIC}"
-  nombres=$(cd "$fijo/reproducir/scripts" && python3 -c "
-import reducido as R
-print(' '.join(n for s in ('Lb', 'control') for n, *_ in R.SERIES[s]))") || { echo "no pude leer las series de $fijo"; exit 1; }
+  nombres=$(python3 reproducir/scripts/nube_L.py modelo corridas) || { echo "no pude leer las series del modelo"; exit 1; }
   fm=()
   for n in $nombres; do
     fm+=(--include="/${n}_diag.npz" --include="/${n}_capas.npz")

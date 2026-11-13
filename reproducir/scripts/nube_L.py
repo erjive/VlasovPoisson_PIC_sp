@@ -32,6 +32,7 @@ de la continua más de 7e-4 en toda la corrida. Las que terminan en v repiten la
     python3 nube_L.py tanda <nombre>            corre, analiza y mide una tanda (TANDAS), en orden
     python3 nube_L.py lista [tandas o corridas] nombres de las corridas (para los guiones del cluster)
     python3 nube_L.py prueba                    la cadena completa con una corrida corta, y su costo
+    python3 nube_L.py modelo [corridas]         series del modelo reducido (serie:CPUs), o sus corridas
     python3 nube_L.py consistencia              C021 frente a la corrida B021 de vlasov-poisson_PIC
     python3 nube_L.py tabla                     medidas frente al modelo reducido
     python3 nube_L.py reticulas                 coherencia libre de la retícula en L de cada corrida
@@ -100,6 +101,21 @@ CORRIDAS = {
     'M030_s020v':  _c(0.03, 10, 0.02,  'rL020_0.03', ancho=2.0),
     'M030_s040v':  _c(0.03, 20, 0.04,  'rL040_0.03', ancho=2.0),
     'M010_s020v':  _c(0.01, 10, 0.02,  'rL020_0.01', ancho=2.0),
+    # Frontera en el plano de mu y sigma_L (2026-11-13): la misma serie a M_gas/M = 0.02 y 0.05. Según la
+    # estimación B2 del relevo (cizalla en L frente a la rotación propia del núcleo, con la m_c del PIC), el
+    # núcleo se pierde entre s_L = 0.007 y 0.014 a 0.02, y entre 0.064 y 0.13 a 0.05.
+    'M020_s000':   _c(0.02, 1,  0.0,    'rL0_0.02'),
+    'M020_s0025':  _c(0.02, 6,  0.0025, 'rL0025b_0.02'),
+    'M020_s005':   _c(0.02, 8,  0.005,  'rL005b_0.02'),
+    'M020_s010':   _c(0.02, 12, 0.01,   'rL010b_0.02'),
+    'M020_s020':   _c(0.02, 20, 0.02,   'rL020b_0.02'),
+    'M050_s000':   _c(0.05, 1,  0.0,    'rL0_0.05'),
+    'M050_s020':   _c(0.05, 20, 0.02,   'rL020b_0.05'),
+    'M050_s040':   _c(0.05, 30, 0.04,   'rL040b_0.05'),
+    # Con s_L >= 0.08 las capas de L menor recurren antes (giran más rápido): hacen falta N_L = 70 y 120 para que
+    # la suma libre no se aparte de la gaussiana más de 7e-4 en toda la corrida (con 60 y 90, 7e-3 y 4e-2).
+    'M050_s080':   _c(0.05, 70, 0.08,   'rL080b_0.05'),
+    'M050_s120':   _c(0.05, 120, 0.12),      # sin modelo: con 252 000 partículas la suma directa tardaría ~1 día
 }
 # Tandas, en el orden en que conviene correrlas. Costo medido con `tiempo` (corridas) y estimado (análisis).
 TANDAS = {
@@ -107,7 +123,15 @@ TANDAS = {
     'primera':      ['M030_s000', 'M030_s020', 'M030_s010', 'M030_s020v', 'M030_s010v'],
     'resto':        ['M030_s040', 'M030_s005', 'M010_s000', 'M010_s020', 'M030_s040v', 'M030_s005v', 'M010_s020v'],
     'convergencia': ['M030_s020n', 'M030_s020r'],
+    # La frontera a otras masas, las más largas primero (la cola no adelanta trabajos). La corrida de 252 000
+    # partículas va aparte porque su análisis necesita más memoria (todo.sh la envía con 32 GB).
+    'frontera':        ['M050_s080', 'M050_s040', 'M020_s020', 'M050_s020', 'M020_s010', 'M020_s005', 'M020_s0025',
+                        'M020_s000', 'M050_s000'],
+    'frontera_grande': ['M050_s120'],
 }
+# Series del modelo reducido (reducido.py) que acompañan a las corridas, con las CPUs de su trabajo de Slurm, en el
+# orden en que todo.sh las envía: la más larga primero.
+SERIES_MODELO = (('Lb', 16), ('control', 16), ('Lf5g', 32), ('Lf5', 16), ('Lf2', 16))
 
 
 def ruta(*p):
@@ -604,6 +628,15 @@ def prueba(n='M030_s010v', pasos=2000):
     return len(fallas)
 
 
+def modelo(nombres):
+    """Series del modelo reducido que acompañan a las corridas, como serie:CPUs; con "corridas", los nombres de
+    todas sus corridas (para traer.sh)."""
+    if nombres == ['corridas']:
+        print(' '.join(n for s, _ in SERIES_MODELO for n, *_ in R.SERIES[s]))
+    else:
+        print(' '.join(f'{s}:{c}' for s, c in SERIES_MODELO))
+
+
 def lista(nombres):
     """Nombres de las corridas de las tandas o corridas dadas (sin argumentos: todas las tandas)."""
     sal = []
@@ -617,7 +650,7 @@ def lista(nombres):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'tanda', 'lista', 'prueba',
-                                     'consistencia', 'tabla', 'reticulas'])
+                                     'modelo', 'consistencia', 'tabla', 'reticulas'])
     ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
@@ -631,6 +664,8 @@ if __name__ == '__main__':
         lista(a.nombres)
     elif a.paso == 'prueba':
         sys.exit(prueba())
+    elif a.paso == 'modelo':
+        modelo(a.nombres)
     elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas'):
         globals()[a.paso]()
     else:
