@@ -5,7 +5,8 @@
 #   bash reproducir/cluster/todo.sh [-n | -t] > todo.txt 2>&1
 #
 #  1. compila VP_PIC y lo prueba (compilar.sh); si la prueba falla, se detiene. Si hay trabajos de
-#     esta serie en la cola no recompila: "make clean" borraría el ejecutable que van a usar;
+#     esta serie en la cola no recompila: "make clean" borraría el ejecutable que van a usar.
+#     Compila también la biblioteca en C del modelo reducido;
 #  2. escribe los datos iniciales que falten (nube_L.py preparar, un minuto);
 #  3. envía el modelo reducido de las series Lb y control (reducido.slurm de vlasov-poisson_PIC,
 #     16 CPUs, unas 2.5 h). Va primero porque es el trabajo más largo y la cola arranca los
@@ -51,6 +52,15 @@ if [ $py_bien = 0 ]; then
 fi
 rm -f "$err_py"
 [ -z "${comp_mal:-}" ] || { echo "ALTO: falló la compilación o la prueba"; exit 1; }
+
+# La biblioteca en C del modelo reducido se compila aquí, como VP_PIC: los nodos de cálculo pueden
+# no tener gcc. Con -march=x86-64-v3 corre en cualquier nodo con AVX2. Si ya está al día no se toca.
+echo; echo "== biblioteca en C del modelo reducido"
+(cd "$FIJO/reproducir/scripts" && python3 -c "
+import os, reducido as R
+R.biblioteca()
+print('cargan:', ', '.join(f for f in ('libreducido.so', 'libreducidof.so') if os.path.exists(os.path.join(R.AQUI, f))))") \
+  || { echo "ALTO: no compila o no carga la biblioteca del modelo reducido"; exit 1; }
 
 echo; echo "== 2. datos iniciales"
 faltan=$(for n in $corridas; do [ -f "$NUBE/ic/$n.dat" ] || echo $n; done)

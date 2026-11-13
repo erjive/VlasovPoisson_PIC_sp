@@ -18,7 +18,8 @@
 #  2. el ejecutable frente al portátil, y el Python del nodo (probar.sh);
 #  3. la cadena completa con una corrida corta de 12600 partículas y seis valores de L: correr,
 #     analizar y medir (nube_L.py prueba);
-#  4. el modelo reducido: compila su biblioteca en C en el nodo y pasa sus pruebas (reducido_pruebas.py);
+#  4. el modelo reducido: su biblioteca en C (compilada por todo.sh en el nodo de entrada) carga en
+#     el nodo y pasa sus pruebas (reducido_pruebas.py);
 #  5. el costo: 2000 pasos de cada una de las catorce corridas (nube_L.py tiempo).
 #
 # Termina con un resumen PASA/FALLA de cada paso. Escribe en log.prueba.<trabajo>.out. No deja
