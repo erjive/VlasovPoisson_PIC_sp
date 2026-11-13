@@ -22,8 +22,8 @@
 #     el nodo y pasa sus pruebas (reducido_pruebas.py);
 #  5. el costo: 2000 pasos de cada una de las catorce corridas (nube_L.py tiempo).
 #
-# Termina con un resumen PASA/FALLA de cada paso. Escribe en log.prueba.<trabajo>.out. No deja
-# archivos de corridas: los de las pruebas se borran.
+# Termina con un resumen PASA/FALLA de cada paso. Escribe en log.prueba.<trabajo>.out, con los
+# errores de cada paso junto a su salida. No deja archivos de corridas: los de las pruebas se borran.
 
 VP_RAIZ="${VP_RAIZ:-${SLURM_SUBMIT_DIR:-$PWD}}"
 source "$VP_RAIZ/reproducir/cluster/comun.sh"
@@ -39,7 +39,7 @@ resumen=()
 paso () {               # paso <título> <comando ...>
   local titulo="$1" t0=$SECONDS; shift
   echo; echo "== $titulo"
-  if "$@"; then resumen+=("PASA  $titulo ($((SECONDS-t0)) s)"); else resumen+=("FALLA $titulo ($((SECONDS-t0)) s)"); fi
+  if "$@" 2>&1; then resumen+=("PASA  $titulo ($((SECONDS-t0)) s)"); else resumen+=("FALLA $titulo ($((SECONDS-t0)) s)"); fi
 }
 
 echo "== 1. el nodo"
