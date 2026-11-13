@@ -36,6 +36,7 @@ de la continua más de 7e-4 en toda la corrida. Las que terminan en v repiten la
     python3 nube_L.py consistencia              C021 frente a la corrida B021 de vlasov-poisson_PIC
     python3 nube_L.py tabla                     medidas frente al modelo reducido
     python3 nube_L.py reticulas                 coherencia libre de la retícula en L de cada corrida
+    python3 nube_L.py figura                    figura del artículo (docs/articulo/figuras/bulto_L.pdf)
 
 Necesita el repositorio vlasov-poisson_PIC junto a este (o en la variable VP_PIC_FIJO): de él salen
 la retícula, las medidas y las corridas con las que se compara. Todo queda en exe/rep/12_nube/.
@@ -628,6 +629,75 @@ def prueba(n='M030_s010v', pasos=2000):
     return len(fallas)
 
 
+def figura():
+    """Figura del artículo: |h_1| (media en 10-20 tau_1), masa del núcleo y densidad en la órbita circular (medias
+    en t >= 20 tau_1) frente a sigma_L/L_0, del PIC y del modelo reducido con las mismas partículas, para cada masa
+    del gas con corridas medidas (las de retícula sin recurrencia: sin sufijo v, n ni r). Escribe
+    docs/articulo/figuras/bulto_L.pdf en vlasov-poisson_PIC y una copia bulto_L.png en exe/rep/12_nube/. Colores:
+    los dos primeros de la paleta de referencia, validados para dos series sobre fondo claro (como reducido.figuras)."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    sup, tinta, tinta2, reja, c_pic, c_red = '#ffffff', '#0b0b0b', '#52514e', '#e4e3df', '#2a78d6', '#eb6834'
+    plt.rcParams.update({'font.size': 9, 'axes.edgecolor': tinta2, 'axes.labelcolor': tinta2, 'xtick.color': tinta2,
+                         'ytick.color': tinta2, 'text.color': tinta, 'axes.linewidth': 0.6, 'figure.facecolor': sup,
+                         'axes.facecolor': sup, 'savefig.facecolor': sup})
+    v = lambda t: (t >= 10*TAU1) & (t <= 20*TAU1)
+    datos = {}
+    for n, c in CORRIDAS.items():
+        if not (n.startswith('M') and n[-1].isdigit() and os.path.exists(ruta(n, 'resumen.npz'))):
+            continue
+        P = numeros(medidas(n)); t, tot, capa, coh = por_capas(n)
+        fila = dict(x=100*c['sl']/(np.sqrt(2)*L0), h1=P['h1'], capa=capa[v(t)].mean(), mc=P['mc'], rho=P['rho_c'])
+        if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '_diag.npz')):
+            M = numeros(R.diagnosticos(c['red']))
+            fila.update(h1_m=M['h1'], mc_m=M['mc'], rho_m=M['rho_c'])
+        datos.setdefault(c['m'], []).append(fila)
+    masas = sorted(datos, reverse=True)
+    estilos = ['-', '--', ':', '-.']
+    fig, ax = plt.subplots(1, 3, figsize=(10, 3.4))
+    paneles = (('h1', 'h1_m', r'$|h_1|/h_0$, mean over $10\leq t/\tau_1\leq 20$', True, None),
+               ('mc', 'mc_m', r'mass fraction of the core', False, (0.042, 'mixed gas')),
+               ('rho', 'rho_m', r'density at the circular orbit, $\hat\rho_c$', True, (1.0, 'bound of mixing')))
+    for a, (k, km, titulo, log, cota) in zip(ax, paneles):
+        for m, ls in zip(masas, estilos):
+            F = sorted(datos[m], key=lambda f: f['x'])
+            x = [f['x'] for f in F]
+            a.plot(x, [f[k] for f in F], color=c_pic, lw=1.3, ls=ls, marker='o', ms=5.5, mec=sup, mew=0.8)
+            xm = [f['x'] for f in F if km in f]
+            if xm:
+                a.plot(xm, [f[km] for f in F if km in f], color=c_red, lw=1.3, ls=ls, marker='D', ms=4.8, mec=sup, mew=0.8)
+            if k == 'h1' and m == masas[0]:     # cada capa de L por separado: lo que no se borra por desfase
+                a.plot(x, [f['capa'] for f in F], color=c_pic, lw=0.9, ls=(0, (1, 1.5)), marker='o', ms=3.2, mfc=sup, mec=c_pic, mew=0.7)
+        if cota:
+            a.axhline(cota[0], color=tinta2, lw=0.8, ls=(0, (4, 3)), zorder=0)
+            a.annotate(cota[1], (1.0, cota[0]), xycoords=('axes fraction', 'data'), xytext=(-2, 3), textcoords='offset points',
+                       ha='right', fontsize=8, color=tinta2)
+        if log:
+            a.set_yscale('log')
+        else:
+            a.set_ylim(0, None)
+        a.set_xlim(-0.06, None)
+        a.grid(True, axis='y', color=reja, lw=0.6); a.set_axisbelow(True)
+        for lado in ('top', 'right'):
+            a.spines[lado].set_visible(False)
+        a.tick_params(length=3, width=0.6); a.tick_params(which='minor', length=2, width=0.4)
+        a.set_title(titulo, loc='left', fontsize=9.5, color=tinta, pad=6)
+        a.set_xlabel(r'$\sigma_L/L_0$ (percent)')
+    h = [Line2D([], [], color=c_pic, lw=1.3, marker='o', ms=5.5, mec=sup, label='PIC'),
+         Line2D([], [], color=c_red, lw=1.3, marker='D', ms=4.8, mec=sup, label='reduced model'),
+         Line2D([], [], color=c_pic, lw=0.9, ls=(0, (1, 1.5)), marker='o', ms=3.2, mfc=sup, mec=c_pic,
+                label=rf'PIC, single layers of $L$ ($M_{{gas}}/M={masas[0]:g}$)')]
+    h += [Line2D([], [], color=tinta2, lw=1.0, ls=ls, label=rf'$M_{{gas}}/M={m:g}$') for m, ls in zip(masas, estilos)]
+    fig.tight_layout(rect=(0, 0, 1, 0.86), w_pad=1.8)
+    fig.legend(handles=h, loc='upper center', ncol=len(h), frameon=False, fontsize=8.5, bbox_to_anchor=(0.5, 1.0),
+               handlelength=2.4, columnspacing=1.4)
+    pdf = os.path.join(FIJO, 'docs', 'articulo', 'figuras', 'bulto_L.pdf')
+    fig.savefig(pdf); fig.savefig(ruta('bulto_L.png'), dpi=110); plt.close(fig)
+    print('escrita', pdf, 'con las masas', ', '.join(f'{m:g} ({len(datos[m])} corridas)' for m in masas))
+
+
 def modelo(nombres):
     """Series del modelo reducido que acompañan a las corridas, como serie:CPUs; con "corridas", los nombres de
     todas sus corridas (para traer.sh)."""
@@ -650,7 +720,7 @@ def lista(nombres):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'tanda', 'lista', 'prueba',
-                                     'modelo', 'consistencia', 'tabla', 'reticulas'])
+                                     'modelo', 'consistencia', 'tabla', 'reticulas', 'figura'])
     ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
@@ -666,7 +736,7 @@ if __name__ == '__main__':
         sys.exit(prueba())
     elif a.paso == 'modelo':
         modelo(a.nombres)
-    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas'):
+    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas', 'figura'):
         globals()[a.paso]()
     else:
         globals()[a.paso](a.solo)
