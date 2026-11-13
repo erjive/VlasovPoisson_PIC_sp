@@ -45,7 +45,8 @@ fi
 if [ $py_bien = 0 ]; then
   echo; echo "ALTO: $(command -v python3 || echo 'no hay python3') ($(python3 --version 2>&1)) no carga nube_L.py:"
   tail -n 6 "$err_py"
-  echo "Hacen falta numpy y scipy: ver la sección Python de diagnostico.txt y los módulos de entorno.sh."
+  echo "Hacen falta numpy y scipy (ver la sección Python de diagnostico.txt y entorno.sh). En el cluster de"
+  echo "LAMOD con AlmaLinux 9 basta con: python3 -m pip install --user scipy"
   rm -f "$err_py"; exit 1
 fi
 rm -f "$err_py"
