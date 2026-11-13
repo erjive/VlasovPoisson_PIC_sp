@@ -8,10 +8,10 @@
 # falta el .par de cada corrida (versionado) y su dato inicial en exe/rep/12_nube/ic/. -n muestra
 # los comandos sin enviar. Una corrida ya medida, o con un trabajo del mismo nombre en la cola,
 # se salta. Por omisión -c 8, que en "olin" son cuatro núcleos: las corridas no ganan con más, y
-# así caben seis a la vez en el nodo.
+# así caben seis a la vez en el nodo. La partición por omisión es VP_PARTICION, de entorno.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
-cpus=8; tiempo=24:00:00; part=olin; mem=8G; seco=0
+cpus=8; tiempo=24:00:00; part="$VP_PARTICION"; mem=8G; seco=0
 while getopts "c:t:p:m:n" o; do
   case $o in
     c) cpus=$OPTARG ;; t) tiempo=$OPTARG ;; p) part=$OPTARG ;; m) mem=$OPTARG ;; n) seco=1 ;;

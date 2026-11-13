@@ -2,7 +2,7 @@
 # Toda la serie de la nube con L distribuida en el cluster, con un solo comando. En el nodo de
 # entrada, desde la raíz de este repositorio, con vlasov-poisson_PIC en la carpeta hermana:
 #
-#   bash reproducir/cluster/todo.sh [-n] > todo.txt 2>&1
+#   bash reproducir/cluster/todo.sh [-n | -t] > todo.txt 2>&1
 #
 #  1. compila VP_PIC y lo prueba (compilar.sh); si la prueba falla, se detiene. Si hay trabajos de
 #     esta serie en la cola no recompila: "make clean" borraría el ejecutable que van a usar;
@@ -13,11 +13,14 @@
 #  4. envía las catorce corridas (enviar.sh primera resto convergencia): un trabajo de 8 CPUs y
 #     8 GB por corrida, que la corre, la analiza y la mide.
 #
-# -n, o una máquina sin sbatch, hace 1 y 2 y solo muestra los sbatch de 3 y 4. Lo hecho o ya en la
-# cola se salta, así que se puede volver a correr. Después: bash reproducir/cluster/estado.sh.
+# -n, o una máquina sin sbatch, hace 1 y 2 y solo muestra los sbatch de 3 y 4. -t hace 1 y 2 y, en
+# vez de la serie, envía la prueba de diez minutos (prueba.slurm). Los trabajos van a la partición
+# VP_PARTICION de entorno.sh. Lo hecho o ya en la cola se salta, así que se puede volver a correr.
+# Después: bash reproducir/cluster/estado.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
-seco=0; [ "${1:-}" = "-n" ] && seco=1
+seco=0; solo_prueba=0
+case "${1:-}" in -n) seco=1 ;; -t) solo_prueba=1 ;; "") ;; *) sed -n '2,21p' "${BASH_SOURCE[0]}"; exit 1 ;; esac
 if ! command -v sbatch > /dev/null 2>&1; then
   [ $seco = 0 ] && echo "no hay sbatch en esta máquina: solo se muestran los comandos"
   seco=1
@@ -25,12 +28,12 @@ fi
 opc=(); [ $seco = 1 ] && opc=(-n)
 cd "$RAIZ" || exit 1
 corridas=$(python3 reproducir/scripts/nube_L.py lista) || { echo "ALTO: nube_L.py no carga"; echo "$corridas"; exit 1; }
-echo "inicio: $(date)   máquina: $(hostname)   HEAD: $(git rev-parse --short HEAD)   vlasov-poisson_PIC: $(cd "$FIJO" && git rev-parse --short HEAD)"
+echo "inicio: $(date)   máquina: $(hostname)   partición: $VP_PARTICION   HEAD: $(git rev-parse --short HEAD)   vlasov-poisson_PIC: $(cd "$FIJO" && git rev-parse --short HEAD)"
 
 echo; echo "== 1. compilación y prueba"
 encola=""
 if command -v squeue > /dev/null 2>&1; then
-  encola=$(squeue -h -u "$USER" -o %j 2>/dev/null | grep -x -F -f <(printf '%s\n' $corridas reducido))
+  encola=$(squeue -h -u "$USER" -o %j 2>/dev/null | grep -x -F -f <(printf '%s\n' $corridas reducido prueba))
 fi
 if [ -n "$encola" ]; then
   echo "hay trabajos de esta serie en la cola ($(echo $encola)): no se recompila"
@@ -46,6 +49,17 @@ fi
 for n in $corridas; do [ -f "$NUBE/ic/$n.dat" ] || { echo "ALTO: falta el dato inicial de $n"; exit 1; }; done
 echo "están los datos iniciales de las $(echo $corridas | wc -w) corridas"
 
+if [ $solo_prueba = 1 ]; then
+  echo; echo "== prueba de diez minutos en un nodo de cálculo"
+  if [ $seco = 1 ]; then
+    echo "sbatch -p $VP_PARTICION reproducir/cluster/prueba.slurm"
+  else
+    sbatch -p "$VP_PARTICION" reproducir/cluster/prueba.slurm && echo "cuando termine, el resultado está en log.prueba.<trabajo>.out"
+  fi
+  echo; echo "fin: $(date)"
+  exit 0
+fi
+
 echo; echo "== 3. modelo reducido (series Lb y control)"
 if (cd "$FIJO/reproducir/scripts" && python3 -c "
 import os, sys, reducido as R
@@ -53,9 +67,9 @@ sys.exit(0 if any(not os.path.exists(os.path.join(R.DATOS, n + '_capas.npz')) fo
   if [ $seco = 0 ] && squeue -h -u "$USER" -n reducido 2>/dev/null | grep -q .; then
     echo "ya hay un trabajo reducido en la cola"
   elif [ $seco = 1 ]; then
-    echo "(cd $FIJO && sbatch reproducir/cluster/reducido.slurm Lb control)"
+    echo "(cd $FIJO && sbatch -p $VP_PARTICION reproducir/cluster/reducido.slurm Lb control)"
   else
-    (cd "$FIJO" && sbatch reproducir/cluster/reducido.slurm Lb control)
+    (cd "$FIJO" && sbatch -p "$VP_PARTICION" reproducir/cluster/reducido.slurm Lb control)
   fi
 else
   echo "ya están hechas"

@@ -14,7 +14,8 @@ must be in the variable `VP_PIC_FIJO`.
 
 | file | purpose |
 |---|---|
-| `todo.sh` | everything at once: build and test, initial data, and all the jobs |
+| `todo.sh` | everything at once: build and test, initial data, and all the jobs; `-t` sends only the test job |
+| `prueba.slurm` | a test of ten minutes on a compute node: the node, the executable, the whole chain on a short run, the reduced model, and the cost of each run |
 | `comun.sh` | locates the two repositories and loads the environment; sourced by the others |
 | `compilar.sh` | builds `exe/VP_PIC` and runs `probar.sh` |
 | `probar.sh` | a run of a few seconds compared with the laptop, the Python modules, and whether the initial data are there |
@@ -24,6 +25,39 @@ must be in the variable `VP_PIC_FIJO`.
 | `traer.sh` | on the laptop: fetches the small files of the finished runs, and with `-r` those of the reduced model |
 
 All commands are given from the root of the repository.
+
+## 0. Check before running anything
+
+In November 2026 the cluster moved from CentOS 7 to AlmaLinux 9, with a new login node. The
+modules, the partition and the paths that `entorno.sh` of `vlasov-poisson_PIC` assumes are
+those of October 2026, so check in three rounds, from cheap to less cheap:
+
+1. On the login node, nothing is submitted. Clone both repositories into a new folder (section
+   1), then:
+
+   ```bash
+   bash ../vlasov-poisson_PIC/reproducir/cluster/diagnostico.sh > diagnostico.txt 2>&1
+   bash reproducir/cluster/todo.sh -n > todo_n.txt 2>&1
+   ```
+
+   `diagnostico.sh` lists the system, the modules, the compilers, Python, every Slurm
+   partition and the storage. `todo.sh -n` builds and tests the executable, writes the initial
+   data and only prints the `sbatch` commands. If a module or the partition changed, edit
+   `entorno.sh` (`module load` lines and `VP_PARTICION`) and repeat.
+
+2. One test job, with the resources of a job of the series:
+
+   ```bash
+   bash reproducir/cluster/todo.sh -t > todo_t.txt 2>&1
+   ```
+
+   It sends `prueba.slurm` to the partition of `entorno.sh`. In about ten minutes
+   `log.prueba.<job>.out` shows the compute node, the executable against the laptop, the whole
+   chain (run, analysis, measures) on a run of 2000 steps with six values of L, the tests of the
+   reduced model, and the cost of 2000 steps of each of the fourteen runs. It ends with
+   `PASA` or `FALLA` for each step.
+
+3. Only if everything passes: `bash reproducir/cluster/todo.sh > todo.txt 2>&1` (section 1).
 
 ## 1. Everything at once
 

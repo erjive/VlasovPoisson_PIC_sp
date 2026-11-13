@@ -31,6 +31,7 @@ de la continua más de 7e-4 en toda la corrida. Las que terminan en v repiten la
     python3 nube_L.py medir [--solo ...]        medidas de cada corrida, en archivos pequeños
     python3 nube_L.py tanda <nombre>            corre, analiza y mide una tanda (TANDAS), en orden
     python3 nube_L.py lista [tandas o corridas] nombres de las corridas (para los guiones del cluster)
+    python3 nube_L.py prueba                    la cadena completa con una corrida corta, y su costo
     python3 nube_L.py consistencia              C021 frente a la corrida B021 de vlasov-poisson_PIC
     python3 nube_L.py tabla                     medidas frente al modelo reducido
     python3 nube_L.py reticulas                 coherencia libre de la retícula en L de cada corrida
@@ -549,6 +550,60 @@ def tanda(nombre):
     tabla()
 
 
+def prueba(n='M030_s010v', pasos=2000):
+    """Prueba corta de la cadena completa en esta máquina: la corrida n recortada a `pasos` pasos (una
+    instantánea cada SALIDA pasos), analizada y medida como las de producción, en
+    exe/rep/12_nube/prueba_<n>/, que se borra al final. Comprueba que el código elige dt = DT, que
+    la energía se conserva, que todas las partículas tienen mapa de ángulo-acción y que las medidas
+    son finitas, y estima lo que tardarían la corrida y su análisis completos. Devuelve el número
+    de fallas."""
+    global TAU1
+    if not os.path.exists(ruta('ic', f'{n}.dat')):
+        preparar()
+    pn = f'prueba_{n}'
+    basura = [ruta(pn), ruta(f'{pn}.ok'), ruta(f'{pn}.log')]
+    subprocess.run(['rm', '-rf', *basura])
+    CORRIDAS[pn] = dict(CORRIDAS[n], red=None, fijo=None)
+    tau, fallas = TAU1, []
+    try:
+        cod, s = _ejecutar(n, [f'Nt={pasos}', f'directory=rep/{GRUPO}/{pn}', f'time_output={pasos}'], ruta(f'{pn}.log'))
+        dt = paso_de_tiempo(ruta(f'{pn}.log'))
+        npart = int(np.prod(forma(n)))
+        print(f'  corrida: {npart} partículas con {CORRIDAS[n]["nl"]} valores de L, {pasos} pasos en {s:.1f} s con '
+              f'{os.environ.get("VP_HILOS", "4")} hilos, dt = {dt:g}; la corrida completa tardaría {s*TFIN/DT/pasos/60:.0f} min', flush=True)
+        if cod != 0:
+            fallas.append(f'VP_PIC terminó con el código {cod}')
+            print(''.join(open(ruta(f'{pn}.log')).readlines()[-8:]))
+        elif abs(dt - DT) > 1e-12:
+            fallas.append(f'el código eligió dt = {dt}, no {DT}')
+        if not fallas:
+            open(ruta(f'{pn}.ok'), 'w').write('')
+            t0 = time.time(); analizar([pn]); ta = time.time() - t0
+            nsal = pasos//SALIDA + 1
+            print(f'  análisis: {ta:.1f} s para {nsal} instantáneas con {os.environ.get("VP_PROCESOS", "4")} procesos; '
+                  f'el de la corrida completa tardaría {ta*(TFIN/DT/SALIDA + 1)/nsal/60:.0f} min', flush=True)
+            TAU1 = pasos*DT/31                  # que las ventanas de las medidas, hasta 30 tau_1, caigan en la prueba
+            medir([pn])
+            d = np.load(ruta(pn, 'bulto.npz'))
+            if not (np.isfinite(d['Q']).all() and np.isfinite(d['J']).all()):
+                fallas.append('hay partículas sin mapa de ángulo-acción')
+            r = resumen(pn); dE, mu = float(r['dE']), float(r['mu'])
+            if not dE < 1e-4:
+                fallas.append(f'la energía cambia {dE:.1e}')
+            N = numeros(medidas(pn)); t, tot, capa, coh = por_capas(pn)
+            vals = [N[k] for k in ('h1', 'h1t', 'rho_c', 'm02', 'mc', 'dr', 'acmin', 'actarde')] + [campo(pn), mu]
+            if not (np.all(np.isfinite(vals)) and np.isfinite(coh).all()):
+                fallas.append('hay medidas que no son finitas')
+            print(f'  medidas: |h_1| al final {tot[-1]:.3f}, coherencia entre capas {coh[-1]:.4f}, m02 {N["m02"]:.3f}, '
+                  f'mu {mu:.3f}, |dE/E| {dE:.1e}', flush=True)
+    finally:
+        TAU1 = tau
+        del CORRIDAS[pn]
+        subprocess.run(['rm', '-rf', *basura])
+    print('PASA la prueba de la cadena' if not fallas else 'FALLA la prueba de la cadena: ' + '; '.join(fallas))
+    return len(fallas)
+
+
 def lista(nombres):
     """Nombres de las corridas de las tandas o corridas dadas (sin argumentos: todas las tandas)."""
     sal = []
@@ -561,8 +616,8 @@ def lista(nombres):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'tanda', 'lista', 'consistencia',
-                                     'tabla', 'reticulas'])
+    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'tanda', 'lista', 'prueba',
+                                     'consistencia', 'tabla', 'reticulas'])
     ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
@@ -574,6 +629,8 @@ if __name__ == '__main__':
         tanda(a.nombres[0])
     elif a.paso == 'lista':
         lista(a.nombres)
+    elif a.paso == 'prueba':
+        sys.exit(prueba())
     elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas'):
         globals()[a.paso]()
     else:
