@@ -1,1 +1,15 @@
 C021        2026-11-12T07:11  par 2d42946b41b5483c  VP_PIC 3fc59a1870e24f8e  src b842bad  HEAD 32fc522
+M030_s000   2026-11-13T00:15  par 4832482e34a46973  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228058, 87 s
+M030_s020   2026-11-13T00:34  par 80093286838f2432  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228059, 1227 s
+M030_s010   2026-11-13T00:25  par 3ee9607acae4f5c9  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228060, 722 s
+M030_s020v  2026-11-13T00:23  par 85cba09dfb24b944  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228061, 606 s
+M030_s010v  2026-11-13T00:20  par 93d008627ab38cf0  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228062, 375 s
+M030_s040   2026-11-13T00:44  par 5444fb845ee895de  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228063, 1843 s
+M030_s005   2026-11-13T00:19  par a47525a4f59e6bb9  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228064, 268 s
+M010_s000   2026-11-13T00:21  par c7249e2871551838  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228065, 46 s
+M010_s020   2026-11-13T00:32  par a5d9aefac98d654d  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228066, 687 s
+M030_s040v  2026-11-13T00:33  par 73673b6dc6d47cd3  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228067, 684 s
+M030_s005v  2026-11-13T00:28  par acdc8610a99fc2d7  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228068, 140 s
+M010_s020v  2026-11-13T00:33  par a962f9ef3663f6b1  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228069, 333 s
+M030_s020n  2026-11-13T00:46  par 5c4c1b64e825d4ea  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228070, 1025 s
+M030_s020r  2026-11-13T00:47  par 2a8e8122d4649ab9  VP_PIC 493a2ec253704155  src b842bad  HEAD fc87d3d  tochtli-48, trabajo 228071, 693 s
