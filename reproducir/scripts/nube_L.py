@@ -134,6 +134,16 @@ CORRIDAS = {
     'F_h05_020':   _c(0.01301, 1, 0.0, 'rF_h05_020', nj=400, nq=100, perfil=('hueco', 0.05), Nt=236000),
     'F_h05_030':   _c(0.01952, 1, 0.0, 'rF_h05_030', nj=400, nq=100, perfil=('hueco', 0.05), Nt=236000),
     'F_h05_050':   _c(0.03253, 1, 0.0, 'rF_h05_050', nj=400, nq=100, perfil=('hueco', 0.05), Nt=236000),
+    # Segunda tanda (2026-11-15): formas que separan las predicciones de mu y de Gamma = g M/(|Omega_0'| J_med^(3/2))
+    # (formas.py; el número del nombre es 1000 Gamma). El anillo exp(-(J - 0.15)^2/0.03^2) tiene la banda estrecha (mu
+    # grande) y está lejos de la órbita circular (Gamma chico); la meseta es constante en 0.05 <= J <= 0.25. t_fin = 30
+    # tau_1: 21 200 (anillo), 13 600 (meseta) y 11 800 (p0). El anillo va en 800 filas para que N_ef se parezca al de p2.
+    'G_anillo_150': _c(0.02117, 1, 0.0, 'rG_anillo_150', nj=800, nq=100, perfil=('anillo', (0.15, 0.03)), Nt=424000),
+    'G_anillo_300': _c(0.04234, 1, 0.0, 'rG_anillo_300', nj=800, nq=100, perfil=('anillo', (0.15, 0.03)), Nt=424000),
+    'G_anillo_450': _c(0.06351, 1, 0.0, 'rG_anillo_450', nj=800, nq=100, perfil=('anillo', (0.15, 0.03)), Nt=424000),
+    'G_meseta_150': _c(0.02109, 1, 0.0, 'rG_meseta_150', nj=400, nq=100, perfil=('meseta', (0.05, 0.25)), Nt=272000),
+    'G_meseta_450': _c(0.06327, 1, 0.0, 'rG_meseta_450', nj=400, nq=100, perfil=('meseta', (0.05, 0.25)), Nt=272000),
+    'G_p0_150':     _c(0.00376, 1, 0.0, 'rG_p0_150',     nj=400, nq=100, perfil=('p', 0.0), Nt=236000),
 }
 # Tandas, en el orden en que conviene correrlas. Costo medido con `tiempo` (corridas) y estimado (análisis).
 TANDAS = {
@@ -149,6 +159,7 @@ TANDAS = {
     'frontera2':       ['M050_s060'],
     'formas':          ['F_h05_050', 'F_h05_030', 'F_h05_020', 'F_p4_050', 'F_p4_030', 'F_p4_020',
                         'F_p2_050', 'F_p2_030', 'F_p2_020'],
+    'formas2':         ['G_anillo_450', 'G_anillo_300', 'G_anillo_150', 'G_meseta_450', 'G_meseta_150', 'G_p0_150'],
 }
 # Series del modelo reducido (reducido.py) que acompañan a las corridas, con las CPUs de su trabajo de Slurm, en el
 # orden en que todo.sh las envía: la más larga primero.
@@ -268,7 +279,8 @@ def preparar(solo=None):
         v = [(k, c['cambios'].get(k, x)) for k, x in v]
         assert not set(c['cambios']) - {k for k, _ in v}
         cab = [f'# Nube {n}: F_0(Q, J) con s_Q = s_J = {SJ} por exp(-(L - {L0:g})^2/s_L^2), s_L = {c["sl"]:g},'
-               + (f' factor en J {c["perfil"][0]} {c["perfil"][1]:g} (reducido.perfil_J),' if c['perfil'] else ''),
+               + (f' factor en J {c["perfil"][0]} ' + ' '.join(f'{v:g}' for v in np.atleast_1d(c['perfil'][1]))
+                  + ' (reducido.perfil_J),' if c['perfil'] else ''),
                f'# M_gas = {c["m"]:g}, retícula {c["nj"]} x {c["nq"]} recortada ({nrc} x {npc}) por N_L = {nlc}'
                + (f' en |L - {L0:g}| <= {c["ancho"]:g} s_L:' if nlc > 1 else ':'),
                f'# {len(r)} partículas, N_ef = {nef:.0f}. Generado por reproducir/scripts/nube_L.py.']
