@@ -634,6 +634,79 @@ def prueba(n='M030_s010v', pasos=2000):
     return len(fallas)
 
 
+# Espacio de fases de la Sección 8: la serie con M_gas/M = 0.03 en t/tau_1 = 3, 10 y al final de la corrida.
+FASE_CORRIDAS = ('M030_s000', 'M030_s010', 'M030_s020', 'M030_s040')
+FASE_TIEMPOS = (3, 10)
+
+
+def fase(solo=None):
+    """Extrae de <n>/bulto.npz el plano (r, p_r) de cada partícula en t/tau_1 = FASE_TIEMPOS y en la última
+    instantánea, con su masa relativa w y su L, a <n>/fase.npz (unos MB). Corre donde están los bulto.npz (el
+    cluster); fase.npz se trae aparte con rsync."""
+    for n in (solo or FASE_CORRIDAS):
+        sal = ruta(n, 'fase.npz')
+        if os.path.exists(sal) or not os.path.exists(ruta(n, 'bulto.npz')):
+            print(f'  {n}: {"ya está" if os.path.exists(sal) else "no hay bulto.npz"}')
+            continue
+        d = np.load(ruta(n, 'bulto.npz'))
+        t = d['t']; idx = [int(np.argmin(np.abs(t - x*TAU1))) for x in FASE_TIEMPOS] + [len(t) - 1]
+        R_, P_ = d['R'], d['P']
+        np.savez(sal, t=t[idx], R=R_[idx], P=P_[idx], w=d['w'], L=d['L'])
+        print(f'  {n}: fase.npz con t/tau_1 = {", ".join(f"{x:.1f}" for x in t[idx]/TAU1)}, {len(d["w"])} partículas', flush=True)
+
+
+def figura_fase():
+    """Figura de la Sección 8: las partículas en el plano (r, p_r) para M_gas/M = 0.03 y cuatro anchuras en L (filas),
+    en t/tau_1 = 3, 10 y al final (columnas), con el color de su masa relativa como en la Fig. 4 del artículo; las dos
+    últimas columnas amplían el entorno de la órbita circular al final, con el color de la masa y con el de
+    (L - L_0)/s_L. Escribe docs/articulo/figuras/bulto_L_fase.pdf en vlasov-poisson_PIC."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({'font.size': 9})
+    R0 = R.R_de_L(L0)
+    fig = plt.figure(figsize=(7.2, 6.2), layout='constrained')
+    gs = fig.add_gridspec(len(FASE_CORRIDAS), 5)
+    for i, n in enumerate(FASE_CORRIDAS):
+        d = np.load(ruta(n, 'fase.npz')); t, Rp, Pp, w, L = d['t'], d['R'], d['P'], d['w'], d['L']
+        c = B.colores(w); orden = np.argsort(c); sl = CORRIDAS[n]['sl']
+        for k in range(len(t)):
+            a = fig.add_subplot(gs[i, k])
+            a.scatter(Rp[k][orden], Pp[k][orden], c=c[orden], s=0.3, cmap='magma_r', vmin=-4, vmax=0, lw=0, rasterized=True)
+            a.set_xlim(2, 16); a.set_ylim(-0.3, 0.3)
+            if i == 0:
+                a.set_title(f'$t/\\tau_1={t[k]/TAU1:.1f}$', fontsize=8)
+            if i == len(FASE_CORRIDAS) - 1:
+                a.set_xlabel('$r$')
+            else:
+                a.set_xticklabels([])
+            if k:
+                a.set_yticklabels([])
+            else:
+                a.set_ylabel('$p_r$')
+                a.text(0.97, 0.95, f'$\\sigma_L/L_0={100*sl/np.sqrt(2)/L0:.2f}\\%$', transform=a.transAxes, fontsize=7,
+                       va='top', ha='right')
+        for k, (col, mapa, lim) in enumerate(((c, 'magma_r', (-4, 0)), ((L - L0)/sl if sl else np.zeros_like(L), 'RdBu_r', (-2.5, 2.5)))):
+            a = fig.add_subplot(gs[i, 3 + k])
+            o = orden if k == 0 else np.argsort(c)
+            a.scatter(Rp[-1][o], Pp[-1][o], c=col[o], s=1.2, cmap=mapa, vmin=lim[0], vmax=lim[1], lw=0, rasterized=True)
+            a.set_xlim(R0 - 1.2, R0 + 1.2); a.set_ylim(-0.08, 0.08)
+            a.tick_params(labelsize=6)
+            if k == 1:
+                a.yaxis.tick_right()
+            else:
+                a.set_yticklabels([])
+            if i == 0:
+                a.set_title('zoom, mass' if k == 0 else r'zoom, $(L - L_0)/s_L$', fontsize=8)
+            if i < len(FASE_CORRIDAS) - 1:
+                a.set_xticklabels([])
+            else:
+                a.set_xlabel('$r$')
+    pdf = os.path.join(FIJO, 'docs', 'articulo', 'figuras', 'bulto_L_fase.pdf')
+    fig.savefig(pdf, dpi=300); plt.close(fig)
+    print('escrita', pdf)
+
+
 def series_L():
     """Por masa del gas, las corridas medidas de las retículas sin recurrencia (sin sufijo v, n ni r), ordenadas por
     s_L, con los números del PIC (P), mu, D y, si existen, los del modelo con las mismas partículas (M)."""
@@ -786,7 +859,8 @@ def lista(nombres):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'tanda', 'lista', 'prueba',
-                                     'modelo', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo'])
+                                     'modelo', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo',
+                                     'fase', 'figura_fase'])
     ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
@@ -802,7 +876,7 @@ if __name__ == '__main__':
         sys.exit(prueba())
     elif a.paso == 'modelo':
         modelo(a.nombres)
-    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo'):
+    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo', 'figura_fase'):
         globals()[a.paso]()
     else:
         globals()[a.paso](a.solo)
