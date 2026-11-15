@@ -24,7 +24,7 @@ esta serie usan |L - L_0| <= 2.5 s_L y N_L = 8, 12, 20 y 30, con las que la suma
 de la continua más de 7e-4 en toda la corrida. Las que terminan en v repiten las retículas del
 2026-11-11, para comparar con aquellas corridas del modelo partícula a partícula.
 
-    python3 nube_L.py preparar                  condiciones iniciales y .par
+    python3 nube_L.py preparar [--solo ...]     condiciones iniciales y .par
     python3 nube_L.py tiempo [--solo ...]       corrida corta de cada caso y costo estimado
     python3 nube_L.py correr [--solo ...]       lo que falte, una corrida detrás de otra, 4 hilos
     python3 nube_L.py analizar [--solo ...]     mapa (Q, J) de cada instantánea
@@ -79,8 +79,8 @@ M_MIX = 0.2/(np.e*np.sqrt(np.pi))               # la mayor m_c de un gas mezclad
 # nombre: masa del gas, retícula completa (N_J, N_Q), puntos, anchura s_L y semiancho (en s_L) de la
 # retícula en L, corrida del modelo reducido y corrida de L fija con las que se compara, y cambios
 # en el .par.
-def _c(m, nl, sl, red=None, fijo=None, ancho=2.5, nj=200, nq=50, **cambios):
-    return dict(m=m, nj=nj, nq=nq, nl=nl, sl=sl, ancho=ancho, red=red, fijo=fijo, cambios=cambios)
+def _c(m, nl, sl, red=None, fijo=None, ancho=2.5, nj=200, nq=50, perfil=None, **cambios):
+    return dict(m=m, nj=nj, nq=nq, nl=nl, sl=sl, ancho=ancho, red=red, fijo=fijo, perfil=perfil, cambios=cambios)
 
 
 CORRIDAS = {
@@ -121,6 +121,19 @@ CORRIDAS = {
     # 2026-11-15: entre s_L = 0.04 (el núcleo sigue, m_c = 0.15) y 0.08 (ya no), para ubicar dónde desaparece con
     # M_gas/M = 0.05. N_L = 50 cumple la cota de 7e-4 de `reticulas` (con 45, 1.1e-3).
     'M050_s060':   _c(0.05, 50, 0.06,   'rL060b_0.05'),
+    # 2026-11-15: otras formas del dato en J con L igual (vlasov-poisson_PIC/reproducir/scripts/formas.py). La masa da el
+    # mu de la nube del artículo con M_ref = 0.02, 0.03 y 0.05 (el número del nombre es 1000 M_ref). p2 es la nube del
+    # artículo en la misma retícula de 400 x 100; p4 es J^4 exp(-J^2/s_J^2) y h05 es (J - 0.05)_+^2 exp(-J^2/s_J^2), cuyo
+    # soporte no llega a la órbita circular. Las de h05 llegan a 30 tau_1 = 11 800.
+    'F_p2_020':    _c(0.02,    1, 0.0, 'R020',       nj=400, nq=100),
+    'F_p2_030':    _c(0.03,    1, 0.0, 'R030',       nj=400, nq=100),
+    'F_p2_050':    _c(0.05,    1, 0.0, 'R050',       nj=400, nq=100),
+    'F_p4_020':    _c(0.01849, 1, 0.0, 'rF_p4_020',  nj=400, nq=100, perfil=('p', 4.0)),
+    'F_p4_030':    _c(0.02774, 1, 0.0, 'rF_p4_030',  nj=400, nq=100, perfil=('p', 4.0)),
+    'F_p4_050':    _c(0.04623, 1, 0.0, 'rF_p4_050',  nj=400, nq=100, perfil=('p', 4.0)),
+    'F_h05_020':   _c(0.01301, 1, 0.0, 'rF_h05_020', nj=400, nq=100, perfil=('hueco', 0.05), Nt=236000),
+    'F_h05_030':   _c(0.01952, 1, 0.0, 'rF_h05_030', nj=400, nq=100, perfil=('hueco', 0.05), Nt=236000),
+    'F_h05_050':   _c(0.03253, 1, 0.0, 'rF_h05_050', nj=400, nq=100, perfil=('hueco', 0.05), Nt=236000),
 }
 # Tandas, en el orden en que conviene correrlas. Costo medido con `tiempo` (corridas) y estimado (análisis).
 TANDAS = {
@@ -134,6 +147,8 @@ TANDAS = {
                         'M020_s000', 'M050_s000'],
     'frontera_grande': ['M050_s120'],
     'frontera2':       ['M050_s060'],
+    'formas':          ['F_h05_050', 'F_h05_030', 'F_h05_020', 'F_p4_050', 'F_p4_030', 'F_p4_020',
+                        'F_p2_050', 'F_p2_030', 'F_p2_020'],
 }
 # Series del modelo reducido (reducido.py) que acompañan a las corridas, con las CPUs de su trabajo de Slurm, en el
 # orden en que todo.sh las envía: la más larga primero.
@@ -166,7 +181,7 @@ def particulas(n):
     código; la masa de cada partícula es proporcional a f L."""
     c = CORRIDAS[n]
     if c['nl'] == 1:
-        Q, J, f = R.reticula(c['nj'], c['nq'], sj=SJ, sq=SQ)
+        Q, J, f = R.reticula(c['nj'], c['nq'], sj=SJ, sq=SQ, perfil=c['perfil'])
         L = np.full_like(Q, L0)
     else:
         Q, J, L, w = R.reticula_L(c['nj'], c['nq'], c['nl'], c['sl'], L0, c['ancho'], sj=SJ, sq=SQ)
@@ -211,13 +226,18 @@ def reticulas():
 def forma(n):
     """Filas en J y columnas en Q que quedan tras el recorte, y puntos en L."""
     c = CORRIDAS[n]
+    if c['perfil'] is not None:
+        Q, J, _ = R.reticula(c['nj'], c['nq'], sj=SJ, sq=SQ, perfil=c['perfil'])
+        return len(np.unique(J)), len(np.unique(Q)), 1
     filas, columnas = B.recorte_reticula(c['nj'], c['nq'], 1e-7, SJ, SQ)
     return len(filas), len(columnas), c['nl']
 
 
-def preparar():
+def preparar(solo=None):
     os.makedirs(ruta('ic'), exist_ok=True); os.makedirs(PARDIR, exist_ok=True)
     for n, c in CORRIDAS.items():
+        if solo and n not in solo:
+            continue
         Q, J, L, f, r, p = particulas(n)
         nrc, npc, nlc = forma(n)
         assert len(r) == nrc*npc*nlc
@@ -247,7 +267,8 @@ def preparar():
              ('output_format', 'raw'), ('directory', f'rep/{GRUPO}/{n}')]
         v = [(k, c['cambios'].get(k, x)) for k, x in v]
         assert not set(c['cambios']) - {k for k, _ in v}
-        cab = [f'# Nube {n}: F_0(Q, J) con s_Q = s_J = {SJ} por exp(-(L - {L0:g})^2/s_L^2), s_L = {c["sl"]:g},',
+        cab = [f'# Nube {n}: F_0(Q, J) con s_Q = s_J = {SJ} por exp(-(L - {L0:g})^2/s_L^2), s_L = {c["sl"]:g},'
+               + (f' factor en J {c["perfil"][0]} {c["perfil"][1]:g} (reducido.perfil_J),' if c['perfil'] else ''),
                f'# M_gas = {c["m"]:g}, retícula {c["nj"]} x {c["nq"]} recortada ({nrc} x {npc}) por N_L = {nlc}'
                + (f' en |L - {L0:g}| <= {c["ancho"]:g} s_L:' if nlc > 1 else ':'),
                f'# {len(r)} partículas, N_ef = {nef:.0f}. Generado por reproducir/scripts/nube_L.py.']
@@ -393,7 +414,15 @@ def analizar(solo=None, procesos=None):
               f' sin mapa en alguna instantánea: {malos}; |dE/E| <= {np.abs(np.array(en)/en[0] - 1).max():.1e}', flush=True)
 
 
-def plano(npz, sal):
+def tau_de(n):
+    """tau_1 de la corrida n: el de su forma del dato en J (reducido.banda_perfil) o el de la nube del artículo."""
+    pf = CORRIDAS[n]['perfil']
+    if pf is None or n.startswith('prueba_'):   # la prueba de la cadena acorta TAU1 para que sus ventanas caigan en ella
+        return TAU1
+    return R.banda_perfil(pf, SJ)[3]
+
+
+def plano(npz, sal, tau=TAU1):
     """Medidas en el plano de zeta (reducido.medidas_plano) de un bulto.npz; se guardan en sal."""
     if os.path.exists(sal):
         return np.load(sal)
@@ -405,13 +434,13 @@ def plano(npz, sal):
     for k in range(len(t)):
         a = np.sqrt(2.0*J[k][ok].astype(float)); q = Q[k][ok].astype(float)
         X[k], Y[k] = a*np.cos(q), a*np.sin(q)
-    M = R.medidas_plano(t, X, Y, w[ok], SJ, TAU1, KAPPA)
+    M = R.medidas_plano(t, X, Y, w[ok], SJ, tau, KAPPA)
     np.savez(sal, fuera=1.0 - w[ok].sum()/w.sum(), **M)
     return np.load(sal)
 
 
 def medidas(n):
-    return plano(ruta(n, 'bulto.npz'), ruta(n, 'medidas.npz'))
+    return plano(ruta(n, 'bulto.npz'), ruta(n, 'medidas.npz'), tau_de(n))
 
 
 def por_capas(n):
@@ -450,7 +479,14 @@ def resumen(n):
     relativo de la energía de la corrida n. Se guarda en <n>/resumen.npz."""
     sal = ruta(n, 'resumen.npz')
     if not os.path.exists(sal):
-        A, wb, mu = B.escalas(n)
+        if CORRIDAS[n]['perfil'] is None:
+            A, wb, mu = B.escalas(n)
+        else:                                   # como bulto.escalas, con la banda de la forma del dato en J
+            omin, omax, djs, _ = R.banda_perfil(CORRIDAS[n]['perfil'], SJ)
+            t, rg, ps, media, fl, esc = B.potencial(n)
+            v = t <= 2*np.pi/omin; z = (rg >= B.RVENT[0]) & (rg <= B.RVENT[1])
+            A = 0.5*(ps[v][:, z].max(0) - ps[v][:, z].min(0)).max()
+            wb = np.sqrt((omax - omin)/djs*A); mu = wb/(omax - omin)
         e = np.load(ruta(n, 'bulto.npz'))['energia']
         np.savez(sal, A=A, wb=wb, mu=mu, dE=np.abs(e/e[0] - 1).max())
     return np.load(sal)
@@ -898,7 +934,7 @@ if __name__ == '__main__':
         sys.exit(prueba())
     elif a.paso == 'modelo':
         modelo(a.nombres)
-    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo', 'figura_fase'):
+    elif a.paso in ('consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo', 'figura_fase'):
         globals()[a.paso]()
     else:
         globals()[a.paso](a.solo)
