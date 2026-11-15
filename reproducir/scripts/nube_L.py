@@ -656,52 +656,57 @@ def fase(solo=None):
 
 
 def figura_fase():
-    """Figura de la Sección 8: las partículas en el plano (r, p_r) para M_gas/M = 0.03 y cuatro anchuras en L (filas),
-    en t/tau_1 = 3, 10 y al final (columnas), con el color de su masa relativa como en la Fig. 4 del artículo; las dos
-    últimas columnas amplían el entorno de la órbita circular al final, con el color de la masa y con el de
-    (L - L_0)/s_L. Escribe docs/articulo/figuras/bulto_L_fase.pdf en vlasov-poisson_PIC."""
+    """Figura de la Sección 8: densidad de masa del gas en el plano (r, p_r) para M_gas/M = 0.03 y cuatro anchuras en L
+    (filas), en t/tau_1 = 3, 10 y al final (columnas). Sin ampliación de la órbita circular: con las 2100 partículas de
+    la corrida con L igual, la densidad en una ventana tan pequeña es ruido de muestreo. La
+    densidad es la masa de las partículas en cada celda de una malla, suavizada con un núcleo gaussiano de una celda y
+    dividida por la masa total y el área de la celda; así no depende del número de partículas, que va de 2100 (L
+    igual) a 63 000. Escala logarítmica común a todas las filas. Escribe docs/articulo/figuras/bulto_L_fase.pdf."""
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
+    from scipy.ndimage import gaussian_filter
     plt.rcParams.update({'font.size': 9})
     R0 = R.R_de_L(L0)
-    fig = plt.figure(figsize=(7.2, 6.2), layout='constrained')
-    gs = fig.add_gridspec(len(FASE_CORRIDAS), 5)
+    ventanas = ((2.0, 12.0, -0.3, 0.3, 125, 75),)       # celdas de 0.08 en r y 0.008 en p_r
+
+    def densidad(r, p, w, v):
+        H, xe, ye = np.histogram2d(r, p, bins=(v[4], v[5]), range=((v[0], v[1]), (v[2], v[3])), weights=w)
+        area = (xe[1] - xe[0])*(ye[1] - ye[0])
+        return gaussian_filter(H, 1.0)/(w.sum()*area)
+
+    fig = plt.figure(figsize=(6.4, 6.0), layout='constrained')
+    gs = fig.add_gridspec(len(FASE_CORRIDAS), 3)
+    tope = None
     for i, n in enumerate(FASE_CORRIDAS):
-        d = np.load(ruta(n, 'fase.npz')); t, Rp, Pp, w, L = d['t'], d['R'], d['P'], d['w'], d['L']
-        c = B.colores(w); orden = np.argsort(c); sl = CORRIDAS[n]['sl']
+        d = np.load(ruta(n, 'fase.npz')); t, Rp, Pp, w = d['t'], d['R'].astype(float), d['P'].astype(float), d['w'].astype(float)
+        sl = CORRIDAS[n]['sl']
         for k in range(len(t)):
+            v = ventanas[0]
+            m = k
+            D = densidad(Rp[m], Pp[m], w, v)
+            if tope is None:
+                tope = np.log10(D.max())             # la mayor densidad de la primera fila en t = 3 tau_1
             a = fig.add_subplot(gs[i, k])
-            a.scatter(Rp[k][orden], Pp[k][orden], c=c[orden], s=0.3, cmap='magma_r', vmin=-4, vmax=0, lw=0, rasterized=True)
-            a.set_xlim(2, 16); a.set_ylim(-0.3, 0.3)
+            im = a.imshow(np.log10(np.maximum(D, 1e-30)).T, origin='lower', extent=v[:4], aspect='auto', cmap='magma_r',
+                          vmin=tope - 4, vmax=tope, interpolation='nearest', rasterized=True)
+            a.set_xlim(v[0], v[1]); a.set_ylim(v[2], v[3])
             if i == 0:
-                a.set_title(f'$t/\\tau_1={t[k]/TAU1:.1f}$', fontsize=8)
+                a.set_title(f'$t/\\tau_1={t[m]/TAU1:.1f}$' + (', zoom' if k == len(t) else ''), fontsize=8)
             if i == len(FASE_CORRIDAS) - 1:
                 a.set_xlabel('$r$')
             else:
                 a.set_xticklabels([])
-            if k:
+            if k == len(t):
+                a.tick_params(labelsize=6); a.yaxis.tick_right()
+            elif k:
                 a.set_yticklabels([])
             else:
                 a.set_ylabel('$p_r$')
                 a.text(0.97, 0.95, f'$\\sigma_L/L_0={100*sl/np.sqrt(2)/L0:.2f}\\%$', transform=a.transAxes, fontsize=7,
                        va='top', ha='right')
-        for k, (col, mapa, lim) in enumerate(((c, 'magma_r', (-4, 0)), ((L - L0)/sl if sl else np.zeros_like(L), 'RdBu_r', (-2.5, 2.5)))):
-            a = fig.add_subplot(gs[i, 3 + k])
-            o = orden if k == 0 else np.argsort(c)
-            a.scatter(Rp[-1][o], Pp[-1][o], c=col[o], s=1.2, cmap=mapa, vmin=lim[0], vmax=lim[1], lw=0, rasterized=True)
-            a.set_xlim(R0 - 1.2, R0 + 1.2); a.set_ylim(-0.08, 0.08)
-            a.tick_params(labelsize=6)
-            if k == 1:
-                a.yaxis.tick_right()
-            else:
-                a.set_yticklabels([])
-            if i == 0:
-                a.set_title('zoom, mass' if k == 0 else r'zoom, $(L - L_0)/s_L$', fontsize=8)
-            if i < len(FASE_CORRIDAS) - 1:
-                a.set_xticklabels([])
-            else:
-                a.set_xlabel('$r$')
+    cb = fig.colorbar(im, ax=fig.axes, shrink=0.6, pad=0.02)
+    cb.set_label(r'$\log_{10}$ of the mass density in the $(r,p_r)$-plane', fontsize=8); cb.ax.tick_params(labelsize=7)
     pdf = os.path.join(FIJO, 'docs', 'articulo', 'figuras', 'bulto_L_fase.pdf')
     fig.savefig(pdf, dpi=300); plt.close(fig)
     print('escrita', pdf)
