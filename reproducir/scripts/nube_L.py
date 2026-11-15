@@ -708,6 +708,22 @@ def figura_fase():
                        va='top', ha='right')
     cb = fig.colorbar(im, ax=fig.axes, shrink=0.5, pad=0.02)
     cb.set_label(r'$\log_{10}$ of the mass density in the $\zeta$-plane', fontsize=8); cb.ax.tick_params(labelsize=7)
+    # El anillo de baja densidad que rodea al núcleo: mínimo de la densidad promediada en el ángulo (anillos de 0.02
+    # entre |zeta| = 0.1 y 0.4) frente al radio (2 J_res)^{1/2} de la resonancia con la oscilación del núcleo,
+    # J_res = (g m_c M_gas/(sqrt(2) |Omega_0'|))^{2/3}, con la m_c de la corrida.
+    h = 1e-5
+    dOdJ = abs((h + R.c_de_L(L0))**-3 - (-h + R.c_de_L(L0))**-3)/(2*h)
+    bordes = np.linspace(0, 0.5, 26); cen = 0.5*(bordes[1:] + bordes[:-1]); area = np.pi*np.diff(bordes**2)
+    for n in FASE_CORRIDAS:
+        d = np.load(ruta(n, 'fase.npz')); mc = numeros(medidas(n))['mc']
+        jres = (R.G*mc*CORRIDAS[n]['m']/(np.sqrt(2)*dOdJ))**(2/3)
+        txt = []
+        for k in range(1, len(d['t'])):
+            J_ = d['J'][k].astype(float); ok = np.isfinite(J_)
+            dens = np.histogram(np.sqrt(2*np.maximum(J_[ok], 0)), bordes, weights=d['w'][ok])[0]/area/d['w'].sum()
+            z = (cen > 0.1) & (cen < 0.4)
+            txt.append(f't/tau_1 = {d["t"][k]/TAU1:.1f}: mínimo en |zeta| = {cen[np.argmin(np.where(z, dens, np.inf))]:.2f}')
+        print(f'  {n}: m_c = {mc:.3f}, (2 J_res)^(1/2) = {np.sqrt(2*jres):.3f}; ' + '; '.join(txt))
     pdf = os.path.join(FIJO, 'docs', 'articulo', 'figuras', 'bulto_L_fase.pdf')
     fig.savefig(pdf, dpi=300); plt.close(fig)
     print('escrita', pdf)
