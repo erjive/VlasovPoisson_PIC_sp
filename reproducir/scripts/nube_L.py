@@ -74,6 +74,7 @@ L0, SJ, SQ = 2.0, 0.1, 0.1
 TFIN, DT, SALIDA = 10000, 0.05, 200
 TAU1, KAPPA = B.TAU1, R.KAPPA
 TS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 20, 25, 30]
+M_MIX = 0.2/(np.e*np.sqrt(np.pi))               # la mayor m_c de un gas mezclado a acción fija (artículo, Sección 6C)
 
 # nombre: masa del gas, retícula completa (N_J, N_Q), puntos, anchura s_L y semiancho (en s_L) de la
 # retícula en L, corrida del modelo reducido y corrida de L fija con las que se compara, y cambios
@@ -633,74 +634,134 @@ def prueba(n='M030_s010v', pasos=2000):
     return len(fallas)
 
 
+def series_L():
+    """Por masa del gas, las corridas medidas de las retículas sin recurrencia (sin sufijo v, n ni r), ordenadas por
+    s_L, con los números del PIC (P), mu, D y, si existen, los del modelo con las mismas partículas (M)."""
+    out = {}
+    for n, c in CORRIDAS.items():
+        if not (n.startswith('M') and n[-1].isdigit() and os.path.exists(ruta(n, 'resumen.npz'))):
+            continue
+        f = dict(n=n, sl=c['sl'], nl=c['nl'], x=100*c['sl']/(np.sqrt(2)*L0), P=numeros(medidas(n)), mu=float(resumen(n)['mu']),
+                 D=campo(n))
+        if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '_diag.npz')):
+            f['M'] = numeros(R.diagnosticos(c['red']))
+        out.setdefault(c['m'], []).append(f)
+    return {m: sorted(F, key=lambda f: f['sl']) for m, F in out.items()}
+
+
+def frontera():
+    """Dónde se pierde el núcleo para cada masa: el s_L en que el exceso m_c - m_mix cae a la mitad de su valor con
+    L igual (interpolación lineal en s_L), en el PIC y en el modelo, y la estimación B2 del relevo: el cociente entre
+    la dispersión |dOmega/dL| sigma_L de las frecuencias de las capas de L y la rotación g m_c M_gas/rho que el
+    núcleo induce en su borde, rho = (0.1 s_J)^{1/2}, con la m_c del PIC con L igual."""
+    h = 1e-5
+    dOdL = abs((R.c_de_L(L0 + h))**-3 - (R.c_de_L(L0 - h))**-3)/(2*h)
+    rho = np.sqrt(0.1*SJ)
+    print(f'|dOmega/dL| = {dOdL:.4f} en J = 0, g = {R.G:.5f}, rho = {rho:.3f}, m_mix = {M_MIX:.4f}')
+    for m, F in sorted(series_L().items()):
+        if len(F) < 2 or F[0]['sl'] != 0:
+            continue
+        print(f'\nM_gas/M = {m:g} (mu = {F[0]["mu"]:.2f}): s_L, sigma_L/L_0 (%), N_L | m_c, |h_1|, masa con J < 0.2 s_J, D: PIC (modelo)')
+        for f in F:
+            P, Mm = f['P'], f.get('M')
+            par = lambda k: f'{P[k]:.3g}' + (f' ({Mm[k]:.3g})' if Mm else '')
+            print(f'   {f["sl"]:6.4f} {f["x"]:5.2f} {f["nl"]:3d} | m_c {par("mc")}  |h_1| {par("h1")}  m02 {par("m02")}  D {f["D"]:.2e}')
+        mitad = {}
+        if F[0]['P']['mc'] < 1.5*M_MIX:
+            print('   con L igual no hay núcleo (m_c compatible con m_mix): no hay frontera que medir')
+            continue
+        for clave, nombre in (('P', 'PIC'), ('M', 'modelo')):
+            G = [f for f in F if clave in f]
+            s = np.array([f['sl'] for f in G]); e = np.array([f[clave]['mc'] for f in G]) - M_MIX
+            k = np.nonzero(e < 0.5*e[0])[0] if len(G) > 1 else []
+            if len(k) == 0:
+                print(f'   {nombre}: el exceso no baja a la mitad en las corridas medidas')
+                continue
+            k = k[0]; mitad[clave] = s[k - 1] + (e[k - 1] - 0.5*e[0])/(e[k - 1] - e[k])*(s[k] - s[k - 1])
+            print(f'   {nombre}: la mitad del exceso en s_L = {mitad[clave]:.4f} (sigma_L/L_0 = {100*mitad[clave]/np.sqrt(2)/L0:.2f} %)')
+        w = R.G*F[0]['P']['mc']*m/rho
+        cociente = lambda sl: dOdL*sl/np.sqrt(2)/w
+        print(f'   B2: g m_c M_gas/rho = {w:.2e}; cociente 0.5 en s_L = {0.5*w*np.sqrt(2)/dOdL:.4f} y 1 en s_L = {w*np.sqrt(2)/dOdL:.4f}'
+              + (f'; en la mitad del PIC vale {cociente(mitad["P"]):.2f}' if 'P' in mitad else ''))
+
+
+def tabla_L():
+    """Filas de la tabla de la Sección 8 del artículo (docs/articulo/tab_L.tex en vlasov-poisson_PIC, macro \\TabL):
+    PIC y modelo para cada corrida de series_L()."""
+    sci = B._sci
+    filas = []
+    for m, F in sorted(series_L().items()):
+        for i, f in enumerate(F):
+            P, Mm = f['P'], f.get('M')
+            mod = lambda k, fmt: (fmt(Mm[k]) if Mm else '--')
+            filas.append((f'${m:g}$ & ${f["mu"]:.2f}$' if i == 0 else ' & ') + f' & ${f["x"]:.2f}$ & ${f["nl"]}$ & '
+                         f'{sci(P["h1"])} & {mod("h1", sci)} & ${P["m02"]:.3f}$ & {mod("m02", lambda x: f"${x:.3f}$")} & '
+                         f'${P["mc"]:.3f}$ & {mod("mc", lambda x: f"${x:.3f}$")} \\\\')
+        filas.append('\\hline')
+    filas = filas[:-1]
+    sal = os.path.join(FIJO, 'docs', 'articulo', 'tab_L.tex')
+    open(sal, 'w').write('% Escrito por VlasovPoisson_PIC_sp/reproducir/scripts/nube_L.py articulo; no editar a mano.\n'
+                         '\\newcommand{\\TabL}{%\n' + '%\n'.join(filas) + '%\n}\n')
+    print('escrita', sal)
+
+
 def figura():
-    """Figura del artículo: |h_1| (media en 10-20 tau_1), masa del núcleo y densidad en la órbita circular (medias
-    en t >= 20 tau_1) frente a sigma_L/L_0, del PIC y del modelo reducido con las mismas partículas, para cada masa
-    del gas con corridas medidas (las de retícula sin recurrencia: sin sufijo v, n ni r). Escribe
-    docs/articulo/figuras/bulto_L.pdf en vlasov-poisson_PIC y una copia bulto_L.png en exe/rep/12_nube/. Colores:
-    los dos primeros de la paleta de referencia, validados para dos series sobre fondo claro (como reducido.figuras)."""
+    """Figura de la Sección 8 del artículo: |h_1| (media en 10-20 tau_1), masa del núcleo m_c y masa con J < 0.2 s_J
+    (medias en t >= 20 tau_1) frente a sigma_L/L_0, del PIC (líneas continuas) y del modelo con las mismas partículas
+    (discontinuas), con un tono de azul por masa del gas (de claro a oscuro al crecer la masa). Escribe
+    docs/articulo/figuras/bulto_L.pdf en vlasov-poisson_PIC y una copia bulto_L.png en exe/rep/12_nube/."""
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
-    sup, tinta, tinta2, reja, c_pic, c_red = '#ffffff', '#0b0b0b', '#52514e', '#e4e3df', '#2a78d6', '#eb6834'
+    sup, tinta, tinta2, reja = '#ffffff', '#0b0b0b', '#52514e', '#e4e3df'
     plt.rcParams.update({'font.size': 9, 'axes.edgecolor': tinta2, 'axes.labelcolor': tinta2, 'xtick.color': tinta2,
                          'ytick.color': tinta2, 'text.color': tinta, 'axes.linewidth': 0.6, 'figure.facecolor': sup,
                          'axes.facecolor': sup, 'savefig.facecolor': sup})
-    v = lambda t: (t >= 10*TAU1) & (t <= 20*TAU1)
-    datos = {}
-    for n, c in CORRIDAS.items():
-        if not (n.startswith('M') and n[-1].isdigit() and os.path.exists(ruta(n, 'resumen.npz'))):
-            continue
-        P = numeros(medidas(n)); t, tot, capa, coh = por_capas(n)
-        fila = dict(x=100*c['sl']/(np.sqrt(2)*L0), h1=P['h1'], capa=capa[v(t)].mean(), mc=P['mc'], rho=P['rho_c'])
-        if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '_diag.npz')):
-            M = numeros(R.diagnosticos(c['red']))
-            fila.update(h1_m=M['h1'], mc_m=M['mc'], rho_m=M['rho_c'])
-        datos.setdefault(c['m'], []).append(fila)
-    masas = sorted(datos, reverse=True)
-    estilos = ['-', '--', ':', '-.']
+    datos = series_L()
+    masas = sorted(datos)
+    tonos = dict(zip(masas, plt.cm.Blues(np.linspace(0.45, 0.95, len(masas)))))
     fig, ax = plt.subplots(1, 3, figsize=(10, 3.4))
-    paneles = (('h1', 'h1_m', r'$|h_1|/h_0$, mean over $10\leq t/\tau_1\leq 20$', True, None),
-               ('mc', 'mc_m', r'mass fraction of the core', False, (0.042, 'mixed gas', 0.38)),
-               ('rho', 'rho_m', r'density at the circular orbit, $\hat\rho_c$', True, (1.0, 'bound of mixing', 0.02)))
-    for a, (k, km, titulo, log, cota) in zip(ax, paneles):
-        for m, ls in zip(masas, estilos):
-            F = sorted(datos[m], key=lambda f: f['x'])
-            x = [f['x'] for f in F]
-            a.plot(x, [f[k] for f in F], color=c_pic, lw=1.3, ls=ls, marker='o', ms=5.5, mec=sup, mew=0.8)
-            xm = [f['x'] for f in F if km in f]
-            if xm:
-                a.plot(xm, [f[km] for f in F if km in f], color=c_red, lw=1.3, ls=ls, marker='D', ms=4.8, mec=sup, mew=0.8)
-            if k == 'h1' and m == masas[0]:     # cada capa de L por separado: lo que no se borra por desfase
-                a.plot(x, [f['capa'] for f in F], color=c_pic, lw=0.9, ls=(0, (1, 1.5)), marker='o', ms=3.2, mfc=sup, mec=c_pic, mew=0.7)
+    paneles = (('h1', r'$|h_1|/h_0$, mean over $10\leq t/\tau_1\leq 20$', True, None),
+               ('mc', r'mass fraction $m_c$ of the core', False, (M_MIX, r'$m_{mix}$')),
+               ('m02', r'mass fraction with $J < 0.2\,\sigma_J$', False, None))
+    for a, (k, titulo, log, cota) in zip(ax, paneles):
+        for m in masas:
+            F = datos[m]
+            a.plot([f['x'] for f in F], [f['P'][k] for f in F], color=tonos[m], lw=1.3, marker='o', ms=5, mec=sup, mew=0.7)
+            G = [f for f in F if 'M' in f]
+            if G:
+                a.plot([f['x'] for f in G], [f['M'][k] for f in G], color=tonos[m], lw=1.1, ls=(0, (4, 2.5)), marker='D', ms=4,
+                       mec=sup, mew=0.7)
         if cota:
-            a.axhline(cota[0], color=tinta2, lw=0.8, ls=(0, (4, 3)), zorder=0)
-            # el rótulo va donde no hay curvas: cota[2] es su posición en fracción del eje x
-            a.annotate(cota[1], (cota[2], cota[0]), xycoords=('axes fraction', 'data'), xytext=(0, 3), textcoords='offset points',
+            a.axhline(cota[0], color=tinta2, lw=0.8, ls=':', zorder=0)
+            a.annotate(cota[1], (0.45, cota[0]), xycoords=('axes fraction', 'data'), xytext=(0, 3), textcoords='offset points',
                        ha='left', fontsize=8, color=tinta2)
         if log:
             a.set_yscale('log')
         else:
             a.set_ylim(0, None)
-        a.set_xlim(-0.06, None)
+        a.set_xlim(-0.1, None)
         a.grid(True, axis='y', color=reja, lw=0.6); a.set_axisbelow(True)
         for lado in ('top', 'right'):
             a.spines[lado].set_visible(False)
         a.tick_params(length=3, width=0.6); a.tick_params(which='minor', length=2, width=0.4)
         a.set_title(titulo, loc='left', fontsize=9.5, color=tinta, pad=6)
         a.set_xlabel(r'$\sigma_L/L_0$ (percent)')
-    h = [Line2D([], [], color=c_pic, lw=1.3, marker='o', ms=5.5, mec=sup, label='PIC'),
-         Line2D([], [], color=c_red, lw=1.3, marker='D', ms=4.8, mec=sup, label='reduced model'),
-         Line2D([], [], color=c_pic, lw=0.9, ls=(0, (1, 1.5)), marker='o', ms=3.2, mfc=sup, mec=c_pic,
-                label=rf'PIC, single layers of $L$ ($M_{{gas}}/M={masas[0]:g}$)')]
-    h += [Line2D([], [], color=tinta2, lw=1.0, ls=ls, label=rf'$M_{{gas}}/M={m:g}$') for m, ls in zip(masas, estilos)]
-    fig.tight_layout(rect=(0, 0, 1, 0.86), w_pad=1.8)
-    fig.legend(handles=h, loc='upper center', ncol=len(h), frameon=False, fontsize=8.5, bbox_to_anchor=(0.5, 1.0),
-               handlelength=2.4, columnspacing=1.4)
+    h = [Line2D([], [], color=tonos[m], lw=1.6, label=rf'$M_{{gas}}/M={m:g}$ ($\mu={datos[m][0]["mu"]:.2f}$)') for m in masas]
+    h += [Line2D([], [], color=tinta2, lw=1.3, marker='o', ms=5, mec=sup, label='PIC'),
+          Line2D([], [], color=tinta2, lw=1.1, ls=(0, (4, 2.5)), marker='D', ms=4, mec=sup, label='epicyclic model')]
+    fig.tight_layout(rect=(0, 0, 1, 0.84), w_pad=1.8)
+    fig.legend(handles=h, loc='upper center', ncol=(len(h) + 1)//2, frameon=False, fontsize=8.5, bbox_to_anchor=(0.5, 1.0),
+               handlelength=2.6, columnspacing=1.6)
     pdf = os.path.join(FIJO, 'docs', 'articulo', 'figuras', 'bulto_L.pdf')
     fig.savefig(pdf); fig.savefig(ruta('bulto_L.png'), dpi=110); plt.close(fig)
     print('escrita', pdf, 'con las masas', ', '.join(f'{m:g} ({len(datos[m])} corridas)' for m in masas))
+
+
+def articulo():
+    """Tabla y figura de la Sección 8 del artículo."""
+    tabla_L(); figura()
 
 
 def modelo(nombres):
@@ -725,7 +786,7 @@ def lista(nombres):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'tanda', 'lista', 'prueba',
-                                     'modelo', 'consistencia', 'tabla', 'reticulas', 'figura'])
+                                     'modelo', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo'])
     ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
@@ -741,7 +802,7 @@ if __name__ == '__main__':
         sys.exit(prueba())
     elif a.paso == 'modelo':
         modelo(a.nombres)
-    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas', 'figura'):
+    elif a.paso in ('preparar', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo'):
         globals()[a.paso]()
     else:
         globals()[a.paso](a.solo)
