@@ -117,6 +117,9 @@ CORRIDAS = {
     # la suma libre no se aparte de la gaussiana más de 7e-4 en toda la corrida (con 60 y 90, 7e-3 y 4e-2).
     'M050_s080':   _c(0.05, 70, 0.08,   'rL080b_0.05'),
     'M050_s120':   _c(0.05, 120, 0.12),      # sin modelo: con 252 000 partículas la suma directa tardaría ~1 día
+    # 2026-11-15: entre s_L = 0.04 (el núcleo sigue, m_c = 0.15) y 0.08 (ya no), para ubicar dónde desaparece con
+    # M_gas/M = 0.05. N_L = 50 cumple la cota de 7e-4 de `reticulas` (con 45, 1.1e-3).
+    'M050_s060':   _c(0.05, 50, 0.06,   'rL060b_0.05'),
 }
 # Tandas, en el orden en que conviene correrlas. Costo medido con `tiempo` (corridas) y estimado (análisis).
 TANDAS = {
@@ -129,10 +132,11 @@ TANDAS = {
     'frontera':        ['M050_s080', 'M050_s040', 'M020_s020', 'M050_s020', 'M020_s010', 'M020_s005', 'M020_s0025',
                         'M020_s000', 'M050_s000'],
     'frontera_grande': ['M050_s120'],
+    'frontera2':       ['M050_s060'],
 }
 # Series del modelo reducido (reducido.py) que acompañan a las corridas, con las CPUs de su trabajo de Slurm, en el
 # orden en que todo.sh las envía: la más larga primero.
-SERIES_MODELO = (('Lb', 16), ('control', 16), ('Lf5g', 32), ('Lf5', 16), ('Lf2', 16))
+SERIES_MODELO = (('Lb', 16), ('control', 16), ('Lf5g', 32), ('Lf5', 16), ('Lf2', 16), ('Lf5b', 32))
 
 
 def ruta(*p):

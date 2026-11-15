@@ -103,5 +103,5 @@ done
 
 echo; echo "== 4. corridas de la nube"
 reproducir/cluster/enviar.sh "${opc[@]}" -m 32G frontera_grande
-reproducir/cluster/enviar.sh "${opc[@]}" frontera primera resto convergencia
+reproducir/cluster/enviar.sh "${opc[@]}" frontera2 frontera primera resto convergencia
 echo; echo "fin: $(date)"
