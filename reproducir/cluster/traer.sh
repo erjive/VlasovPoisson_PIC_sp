@@ -12,8 +12,9 @@
 # -g       trae también los archivos grandes: bulto.npz de cada corrida del PIC, los mapas (Q, J)
 #          de todas las instantáneas (16 kB por partícula: 0.7 GB con 42000), y con -r las corridas
 #          del modelo (8 kB por partícula). Sin él vienen solo los archivos pequeños, que bastan
-#          para "nube_L.py tabla": medidas.npz, capas.npz, campo.npz, resumen.npz, nucleo.npz,
-#          params_usados.par, y el .ok, el .meta, el .log y la salida de Slurm de cada corrida.
+#          para "nube_L.py tabla" y "frontera": medidas.npz, capas.npz, campo.npz, resumen.npz,
+#          nucleo.npz, nucleo_capas.npz, params_usados.par, y el .ok, el .meta, el .log y la salida
+#          de Slurm de cada corrida.
 # -f       pisa una corrida del PIC que ya exista en el portátil (por omisión se niega).
 # -n       muestra lo que traería, sin copiar.
 #
@@ -43,7 +44,8 @@ for n in $corridas; do
   fi
   filtros+=(--include="/$n.ok" --include="/$n.meta" --include="/$n.log" --include="/slurm_${n}_*" --include="/$n/"
             --include="/$n/medidas.npz" --include="/$n/capas.npz" --include="/$n/campo.npz"
-            --include="/$n/resumen.npz" --include="/$n/nucleo.npz" --include="/$n/params_usados.par")
+            --include="/$n/resumen.npz" --include="/$n/nucleo.npz" --include="/$n/nucleo_capas.npz"
+            --include="/$n/params_usados.par")
   [ $grande = 1 ] && filtros+=(--include="/$n/bulto.npz")
 done
 rc=0

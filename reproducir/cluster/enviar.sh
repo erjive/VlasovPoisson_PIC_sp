@@ -4,8 +4,9 @@
 #
 #   reproducir/cluster/enviar.sh [-c cpus] [-t hh:mm:ss] [-p partición] [-m memoria] [-n] <tanda o corrida> ...
 #
-# Las tandas son las de TANDAS en nube_L.py (primera, resto, convergencia, frontera, frontera_grande);
-# sin nombres, todas. Memoria por omisión 16 GB; la corrida de 252 000 partículas necesita -m 32G. Hacen
+# Las tandas son las de TANDAS en nube_L.py (primera, resto, convergencia, frontera, frontera_grande,
+# formas, formas2, ley, ley_grande, ...); sin nombres, todas. Memoria por omisión 16 GB; las corridas de
+# 189 000 y 252 000 partículas (ley_grande, frontera_grande) necesitan -m 32G. Hacen
 # falta el .par de cada corrida (versionado) y su dato inicial en exe/rep/12_nube/ic/. -n muestra
 # los comandos sin enviar. Una corrida ya medida, o con un trabajo del mismo nombre en la cola,
 # se salta. Por omisión -c 8, que en "olin" son cuatro núcleos: las corridas no ganan con más, y
