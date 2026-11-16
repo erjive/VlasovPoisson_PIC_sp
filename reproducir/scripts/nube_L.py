@@ -995,9 +995,13 @@ def familias_L():
     return {k: sorted(F, key=lambda f: f['sl']) for k, F in out.items()}
 
 
+MASAS_SERIE = (0.01, 0.02, 0.03, 0.05)          # las de la Tabla y la primera figura de la Sección 8 del artículo
+
+
 def series_L():
-    """familias_L() para la familia de la Sección 8 del artículo (isócrono, s_J = 0.1), por masa del gas."""
-    return {m: F for (pot, sj, m), F in familias_L().items() if (pot, sj) == ('isocrono', SJ)}
+    """familias_L() para las series de la Sección 8 del artículo (isócrono, s_J = 0.1, MASAS_SERIE), por masa del
+    gas. Las familias de la prueba de la ley (LEY) van en `frontera`, `figura_chi` y `tabla_chi`."""
+    return {m: F for (pot, sj, m), F in familias_L().items() if (pot, sj) == ('isocrono', SJ) and m in MASAS_SERIE}
 
 
 def J_mediana(sj=SJ):
@@ -1251,14 +1255,51 @@ def figura_chi():
           + '; sigma_L de la mitad/(Gamma J_med): '
           + ', '.join(f'{res[k]["mitad_P"]/np.sqrt(2)/(res[k]["gamma"]*constantes(k[0], k[1])["jmed"]):.2f}' for k in con))
     print('  chi de las corridas de cada familia: ' + '; '.join(f'{k[2]:g}: ' + ' '.join(f'{x:.2f}' for x in res[k]['P'][0]) for k in ref + otras))
+    xs = [100*res[k]['mitad_P']/np.sqrt(2)/L0 for k in con]; cs = [chi_de(k[2], res[k]['mitad_P'], k[0], k[1]) for k in con]
+    cm = [chi_de(k[2], res[k]['mitad_M'], k[0], k[1]) for k in con if 'mitad_M' in res[k]]
+    print(f'  entre las {len(con)} familias: sigma_L/L_0 de la mitad de {min(xs):.2f} a {max(xs):.2f} % (factor {max(xs)/min(xs):.1f}); '
+          f'chi de {min(cs):.2f} a {max(cs):.2f} (factor {max(cs)/min(cs):.2f}); modelo, chi de {min(cm):.2f} a {max(cm):.2f}')
+    dif = []                                    # m_c por capa frente a m_c, en las corridas con chi <= 0.26 y con 0.26 < chi <= 0.36
+    for (pot, sj, m), F in familias_L().items():
+        for f in F:
+            if f['nl'] > 1 and f['mcc'] is not None:
+                dif.append((chi_de(m, f['sl'], pot, sj), f['mcc']/f['P']['mc'] - 1))
+    if dif:
+        a = [d for c, d in dif if c <= 0.26]; b = [d for c, d in dif if 0.26 < c <= 0.36]; c5 = [d for c, d in dif if c > 0.36]
+        print(f'  m_c por capa frente a m_c ({len(dif)} corridas): con chi <= 0.26 difiere entre {100*min(a):+.0f} y {100*max(a):+.0f} %; '
+              f'con chi = 0.35, entre {100*min(b):+.0f} y {100*max(b):+.0f} %; con chi = 0.5, entre {100*min(c5):+.0f} y {100*max(c5):+.0f} %')
     print('  última corrida con núcleo (exceso > 0.1 del de L igual) y primera sin él, en chi: '
           + '; '.join(f'{k[2]:g}: {max([x for x, e in zip(res[k]["P"][0], res[k]["P"][1]) if e > 0.1]):.2f} y '
                       f'{min([x for x, e in zip(res[k]["P"][0], res[k]["P"][1]) if e <= 0.1], default=float("nan")):.2f}' for k in ref + otras))
 
 
+def tabla_chi():
+    """Filas de la tabla de la Sección 8D del artículo (docs/articulo/tab_chi.tex en vlasov-poisson_PIC, macro
+    \\TabChi): para cada familia con núcleo, Gamma, la anchura sigma_L/L_0 en que el exceso de m_c cae a la mitad y
+    su chi, del PIC y del modelo, y el cociente con la rotación del núcleo (B2) en la mitad del PIC."""
+    res = frontera(verboso=False)
+    orden = sorted(res, key=lambda k: (k[0] != 'isocrono', k[1] != SJ, k[1], k[2]))
+    filas, antes = [], None
+    for k in orden:
+        pot, sj, m = k; r = res[k]; kc = constantes(pot, sj)
+        w = kc['g']*r['mc0']*m/np.sqrt(0.1*sj)
+        x = lambda s: f'${100*s/np.sqrt(2)/L0:.2f}$'
+        c = lambda s: f'${chi_de(m, s, pot, sj):.2f}$'
+        if antes is not None and k[:2] != antes:
+            filas.append('\\hline')
+        antes = k[:2]
+        filas.append(f'{"isochrone" if pot == "isocrono" else "Kepler"} & ${sj:g}$ & ${m:g}$ & ${r["gamma"]:.2f}$ & '
+                     f'{x(r["mitad_P"])} & {x(r["mitad_M"])} & {c(r["mitad_P"])} & {c(r["mitad_M"])} & '
+                     f'${kc["dOdL"]*r["mitad_P"]/np.sqrt(2)/w:.2f}$ \\\\')
+    sal = os.path.join(FIJO, 'docs', 'articulo', 'tab_chi.tex')
+    open(sal, 'w').write('% Escrito por VlasovPoisson_PIC_sp/reproducir/scripts/nube_L.py articulo; no editar a mano.\n'
+                         '\\newcommand{\\TabChi}{%\n' + '%\n'.join(filas) + '%\n}\n')
+    print('escrita', sal)
+
+
 def articulo():
-    """Tabla y figuras de la Sección 8 del artículo."""
-    tabla_L(); figura(); figura_chi()
+    """Tablas y figuras de la Sección 8 del artículo."""
+    tabla_L(); figura(); tabla_chi(); figura_chi()
 
 
 def modelo(nombres):
