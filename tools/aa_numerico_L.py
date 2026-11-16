@@ -2,8 +2,9 @@
 
 El potencial es el isócrono (masa y escala unitarias) más una corrección tabulada en una
 malla radial, por ejemplo el potencial propio de una corrida autogravitante, interpolada
-con un spline cúbico natural y continuada fuera de la tabla como -M/r. Para cada
-partícula (r, p_r, L):
+con un spline cúbico natural y continuada fuera de la tabla como -M/r. Con fondo = 'kepler'
+el potencial externo es el de BGtype = sphere del código: la masa puntual, -1/r, con la esfera
+homogénea de radio 1 por dentro. Para cada partícula (r, p_r, L):
 
     E  = p_r^2/2 + Phi_ef(r),                 Phi_ef = Phi + L^2/(2 r^2)
     r_c : mínimo de Phi_ef (bisección sobre dPhi_ef/dr, con la derivada del spline)
@@ -17,7 +18,7 @@ los puntos de retorno, con Gauss-Legendre. Generaliza reproducir/scripts/aa_nume
 vlasov-poisson_PIC (L fija).
 
 Uso como módulo:
-    m = MapaAA(r_malla, phi_self)      # o MapaAA() para el isócrono solo
+    m = MapaAA(r_malla, phi_self)      # o MapaAA() para el isócrono solo; fondo='kepler' para la masa puntual
     Q, J, E = m(r, p, L)
     r, p = m.invertir(Q, J, L)         # inversa, por tablas J(E) para cada L distinto
 """
@@ -33,6 +34,20 @@ def phi_iso(r):
 def dphi_iso(r):
     s = np.sqrt(1.0 + r**2)
     return r/(s*(1.0 + s)**2)
+
+
+def phi_esfera(r):
+    """Fondo BGtype = sphere del código (bgpot en utils.f90): esfera homogénea de masa y radio 1; fuera, -1/r."""
+    a = np.abs(np.asarray(r, float))
+    return np.where(a < 1.0, 0.5*(a**2 - 3.0), -1.0/np.maximum(a, 1e-300))
+
+
+def dphi_esfera(r):
+    a = np.abs(np.asarray(r, float))
+    return np.where(a < 1.0, a, 1.0/np.maximum(a, 1e-300)**2)
+
+
+FONDOS = {'isocrono': (phi_iso, dphi_iso), 'kepler': (phi_esfera, dphi_esfera)}
 
 
 class SplineCubico:
@@ -72,7 +87,8 @@ class SplineCubico:
 
 
 class MapaAA:
-    def __init__(self, r_malla=None, phi_self=None, nodos=64):
+    def __init__(self, r_malla=None, phi_self=None, nodos=64, fondo='isocrono'):
+        self._phi0, self._dphi0 = FONDOS[fondo]
         self.tabla = None
         if phi_self is not None:
             self.tabla = SplineCubico(r_malla, phi_self)
@@ -84,7 +100,7 @@ class MapaAA:
     # --- potencial -------------------------------------------------------------
     def phi(self, r):
         r = np.asarray(r, float)
-        p = phi_iso(r)
+        p = self._phi0(r)
         if self.tabla is None:
             return p
         dentro = self.tabla(np.clip(r, self.r0_t, self.r_ult))
@@ -92,7 +108,7 @@ class MapaAA:
 
     def dphi(self, r):
         r = np.asarray(r, float)
-        d = dphi_iso(r)
+        d = self._dphi0(r)
         if self.tabla is None:
             return d
         dentro = self.tabla.deriv(np.clip(r, self.r0_t, self.r_ult))
@@ -230,3 +246,15 @@ def aa_isocrono(r, p, L):
     Q = eta - np.sqrt((-2*E)**3)*np.sqrt(np.maximum(-L**2-2*E-2-0.5/E, 0))/(-2*E)*np.sin(eta)
     J = 1/np.sqrt(-2*E) - 0.5*(L+np.sqrt(L**2+4))
     return np.mod(Q, 2*np.pi), J, E
+
+
+def aa_kepler(r, p, L):
+    """Mapa analítico de la masa puntual (GM = 1), para r >= 1: a = -1/(2E), J = sqrt(a) - L,
+    e^2 = 1 - L^2/a, r = a (1 - e cos eta), Q = eta - e sin eta (para validar, como aa_isocrono)."""
+    r, p = np.asarray(r, float), np.asarray(p, float)
+    E = 0.5*p**2 + 0.5*L**2/r**2 - 1.0/r
+    a = -0.5/E
+    e = np.sqrt(np.maximum(1.0 - L**2/a, 0.0))
+    c = np.clip((1.0 - r/a)/np.where(e > 0, e, 1.0), -1.0, 1.0)
+    eta = np.where(p >= 0, np.arccos(c), 2.0*np.pi - np.arccos(c))
+    return np.mod(eta - e*np.sin(eta), 2.0*np.pi), np.sqrt(a) - L, E

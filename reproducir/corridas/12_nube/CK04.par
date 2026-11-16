@@ -1,0 +1,35 @@
+# Nube CK04: F_0(Q, J) con s_Q = s_J = 0.1, en las variables de ángulo-acción de la masa puntual (BGtype = sphere, r >= 1), por exp(-(L - 2)^2/s_L^2), s_L = 0,
+# M_gas = 0.04, retícula 400 x 25 recortada (299 x 6) por N_L = 1:
+# 1794 partículas, N_ef = 243. Generado por reproducir/scripts/nube_L.py.
+# Cambios: Nt = 40000.
+state            = checkpoint
+CheckPointfile   = rep/12_nube/ic/CK04.dat
+Nrc              = 299
+Npc              = 6
+Nlc              = 1
+a0               = 0.04
+l0               = 2.0
+sl               = 0.5
+sr               = 0.1
+sp               = 0.1
+lminc            = 1.5
+lmaxc            = 2.5
+rminc            = 3.0
+rmaxc            = 14.0
+pminc            = -0.25
+pmaxc            = 0.25
+dr               = 0.1
+rmin             = 0.0
+rmax             = 20.0
+pmax             = 2.0
+courant          = 1.0
+Nt               = 40000
+integrator       = yoshida4
+bsplineorder     = 1
+BGtype           = sphere
+autointeraction  = .true.
+spatial_output   = 200
+field_output     = 200
+time_output      = 20000
+output_format    = raw
+directory        = rep/12_nube/CK04

@@ -1,0 +1,35 @@
+# Nube J20M080_s0175: F_0(Q, J) con s_Q = 0.1, s_J = 0.2 por exp(-(L - 2)^2/s_L^2), s_L = 0.0175,
+# M_gas = 0.08, retícula 200 x 50 recortada (150 x 14) por N_L = 12 en |L - 2| <= 2.5 s_L:
+# 25200 partículas, N_ef = 1341. Generado por reproducir/scripts/nube_L.py.
+# Cambios: Nt = 120000.
+state            = checkpoint
+CheckPointfile   = rep/12_nube/ic/J20M080_s0175.dat
+Nrc              = 150
+Npc              = 14
+Nlc              = 12
+a0               = 0.08
+l0               = 2.0
+sl               = 0.0175
+sr               = 0.2
+sp               = 0.1
+lminc            = 1.95625
+lmaxc            = 2.04375
+rminc            = 3.0
+rmaxc            = 14.0
+pminc            = -0.25
+pmaxc            = 0.25
+dr               = 0.1
+rmin             = 0.0
+rmax             = 20.0
+pmax             = 2.0
+courant          = 1.0
+Nt               = 120000
+integrator       = yoshida4
+bsplineorder     = 1
+BGtype           = Isochrone
+autointeraction  = .true.
+spatial_output   = 200
+field_output     = 200
+time_output      = 20000
+output_format    = raw
+directory        = rep/12_nube/J20M080_s0175
