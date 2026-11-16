@@ -30,6 +30,7 @@ de la continua más de 7e-4 en toda la corrida. Las que terminan en v repiten la
     python3 nube_L.py analizar [--solo ...]     mapa (Q, J) de cada instantánea
     python3 nube_L.py medir [--solo ...]        medidas de cada corrida, en archivos pequeños
     python3 nube_L.py medir_capas [--solo ...]  masa del núcleo capa por capa de las corridas que no la tienen
+    python3 nube_L.py medir_colas [--solo ...]  armónicos y perfiles junto a la órbita circular de las que no los tienen
     python3 nube_L.py tanda <nombre>            corre, analiza y mide una tanda (TANDAS), en orden
     python3 nube_L.py lista [tandas o corridas] nombres de las corridas (para los guiones del cluster)
     python3 nube_L.py prueba [corridas]         la cadena completa con una corrida corta, y su costo
@@ -64,6 +65,7 @@ sys.path.insert(0, os.path.join(FIJO, 'reproducir', 'scripts'))
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 import bulto as B
 import reducido as R
+import formas as FO
 from demo_eta import envolvente
 from aa_numerico_L import MapaAA, phi_iso, phi_esfera, aa_isocrono, aa_kepler
 from raw_io import CorridaRaw
@@ -174,6 +176,32 @@ for _f, (_m, _sj, _pot, _dtm, _tf, _S) in LEY.items():
     for _sl, _nl in ((0.0, 1),) + _S:
         _n, _r = nombre_ley(_f, _sl)
         CORRIDAS[_n] = _c(_m, _nl, _sl, _r, **_op)
+# 2026-11-16: leyes de decaimiento de la mezcla y del campo (vlasov-poisson_PIC/reproducir/scripts/colas.py), en el
+# régimen en que el gas se mezcla, como función de la autogravedad y de la forma de la FD. Retícula de 3200 x 100
+# recortada (unas 62 000 partículas con la nube del artículo, N_ef ~ 7000), L igual, hasta 30 tau_1. El número del
+# nombre es 1000 Gamma, con Gamma = g M/(|Omega_0'| J_med^(3/2)): la nube del artículo (p2) con Gamma = 0.025, 0.05,
+# 0.10 y 0.15 (mu = 0.13 a 0.32), y las formas p4, h05, anillo y meseta con Gamma = 0.05 y 0.10. Con las retículas de
+# 400 filas los armónicos n >= 2 y el potencial quedan dominados por el ruido de partículas desde unas 8 tau_1.
+COLAS = {  # forma: (perfil, pasos si no son los de la serie, valores de Gamma)
+    'p2':     (None, None, (0.025, 0.05, 0.10, 0.15)),
+    'p4':     (('p', 4.0), None, (0.05, 0.10)),
+    'h05':    (('hueco', 0.05), 236000, (0.05, 0.10)),
+    'anillo': (('anillo', (0.15, 0.03)), 424000, (0.05, 0.10)),
+    'meseta': (('meseta', (0.05, 0.25)), 272000, (0.05, 0.10)),
+}
+
+
+def masa_de_gamma(perfil, gam):
+    """La masa del gas con la que la forma dada tiene el Gamma dado (cinco decimales)."""
+    return round(gam*abs(FO.OMEGA_P)*FO.J_mediana(perfil)**1.5/R.G, 5)
+
+
+for _f, (_pf, _nt, _G) in COLAS.items():
+    for _g in _G:
+        CORRIDAS[f'H_{_f}_{int(round(_g*1000)):03d}'] = _c(masa_de_gamma(_pf, _g), 1, 0.0, nj=3200, nq=100, perfil=_pf,
+                                                         **({} if _nt is None else {'Nt': _nt}))
+# La nube del artículo con Gamma = 0.10 en una retícula con el doble de filas y de columnas, para la convergencia.
+CORRIDAS['H2_p2_100'] = _c(masa_de_gamma(None, 0.10), 1, 0.0, nj=6400, nq=200)
 # Consistencia de las familias nuevas con el código de L fija: las nubes J05_0.01, J20_0.08 y K_0.04 de
 # vlasov-poisson_PIC en su retícula de 400 x 25 (aquí recortada donde el peso baja de 1e-7 de su máximo), con L
 # igual, hasta t = 2000. Comprueban el dato inicial, el fondo del código y el mapa de ángulo-acción con otra s_J y
@@ -207,6 +235,10 @@ TANDAS = {
                         for s in [x for x, _ in LEY[f][5]][::-1] + [0.0] if (f, s) != ('M100', 0.103)],
     'ley_grande':      ['M100_s103'],
     'consistencia_ley': ['CJ05', 'CJ20', 'CK04'],
+    # Leyes de decaimiento (2026-11-16): las de más pasos primero. La de 6400 x 200 va aparte, con 32 GB.
+    'colas':           ['H_anillo_100', 'H_anillo_050', 'H_meseta_100', 'H_meseta_050', 'H_h05_100', 'H_h05_050',
+                        'H_p2_150', 'H_p2_100', 'H_p2_050', 'H_p2_025', 'H_p4_100', 'H_p4_050'],
+    'colas_fina':      ['H2_p2_100'],
 }
 # Series del modelo reducido (reducido.py) que acompañan a las corridas, con las CPUs de su trabajo de Slurm, en el
 # orden en que todo.sh las envía: la más larga primero.
@@ -623,6 +655,55 @@ def medir_capas(solo=None):
         print(f'  {n}: m_c por capa {mc_capas(n):.4f} ({time.time()-t0:.0f} s)', flush=True)
 
 
+def armonicos(n):
+    """h_k(t)/h_0, k = 0..5, de la corrida n (mapa del potencial de cada instante), copiados de bulto.npz a un
+    archivo pequeño, <n>/armonicos.npz, para traerlos del cluster."""
+    sal = ruta(n, 'armonicos.npz')
+    if not os.path.exists(sal):
+        d = np.load(ruta(n, 'bulto.npz'))
+        np.savez(sal, t=d['t'], hk=d['hk'])
+    return np.load(sal)
+
+
+def perfiles(n, tiempos=(3, 5, 10, 15, 20, 25), nb=40, xmax=0.4):
+    """La FD junto a la órbita circular en t/tau_1 = tiempos: en nb franjas de J entre 0 y xmax s_J, la masa por
+    unidad de J (f0, la FD promediada en el ángulo salvo un factor) y el módulo de sus tres primeros armónicos,
+    a_k = |sum_i m_i exp(-i k Q_i)|/dJ, todo por unidad de masa total. Cada valor es la media de las cinco
+    instantáneas alrededor del tiempo pedido. La cola de h_k la fija el exponente de a_k en J -> 0 (Sección 3 del
+    artículo): a_k ~ J^q da t^-(q+1). Se guarda en <n>/perfiles.npz. Necesita <n>/bulto.npz."""
+    sal = ruta(n, 'perfiles.npz')
+    if not os.path.exists(sal):
+        d = np.load(ruta(n, 'bulto.npz'))
+        t, w = d['t'], np.asarray(d['w'], float); Q, J = d['Q'], d['J']
+        sj, tau = CORRIDAS[n]['sj'], tau_de(n)
+        x = np.linspace(0.0, xmax, nb + 1); bordes = x*sj; dJ = np.diff(bordes); W = w.sum()
+        f0 = np.zeros((len(tiempos), nb)); a = np.zeros((len(tiempos), 3, nb)); tt = np.zeros(len(tiempos))
+        for i, T in enumerate(tiempos):
+            k0 = int(np.argmin(np.abs(t - T*tau))); ks = [k for k in range(k0 - 2, k0 + 3) if 0 <= k < len(t)]
+            tt[i] = t[k0]
+            for k in ks:
+                j = J[k].astype(float); q = Q[k].astype(float)
+                ok = np.isfinite(j) & np.isfinite(q) & (j < bordes[-1])
+                b = np.clip(np.searchsorted(bordes, j[ok], side='right') - 1, 0, nb - 1)
+                f0[i] += np.bincount(b, weights=w[ok], minlength=nb)/len(ks)
+                for m in (1, 2, 3):
+                    z = w[ok]*np.exp(-1j*m*q[ok])
+                    a[i, m - 1] += np.abs(np.bincount(b, weights=z.real, minlength=nb) + 1j*np.bincount(b, weights=z.imag, minlength=nb))/len(ks)
+        np.savez(sal, x=x, t=tt, tau=tau, f0=f0/dJ/W, a=a/dJ/W)
+    return np.load(sal)
+
+
+def medir_colas(solo=None):
+    """armonicos y perfiles de las corridas con una sola L que tienen bulto.npz y aún no los tienen (las anteriores
+    al 2026-11-16 se midieron sin ellos; sus bulto.npz están donde se corrieron)."""
+    for n, c in CORRIDAS.items():
+        if (solo and n not in solo) or c['nl'] != 1 or not os.path.exists(ruta(n, 'bulto.npz')):
+            continue
+        if not (os.path.exists(ruta(n, 'armonicos.npz')) and os.path.exists(ruta(n, 'perfiles.npz'))):
+            armonicos(n); perfiles(n)
+            print(f'  {n}: armonicos.npz y perfiles.npz', flush=True)
+
+
 def por_capas_reducido(nombre):
     """Lo mismo para una corrida del modelo reducido (reducido.capas); None si no está."""
     d = R.capas(nombre)
@@ -662,7 +743,7 @@ def medir(solo=None):
         t0 = time.time()
         medidas(n); por_capas(n); B.campo_particulas(n)
         if c['nl'] == 1:
-            B.nucleo(n)
+            B.nucleo(n); armonicos(n); perfiles(n)
         else:
             nucleo_por_capas(n)
         r = resumen(n)
@@ -1323,7 +1404,7 @@ def lista(nombres):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'medir_capas', 'tanda', 'lista',
+    ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'medir_capas', 'medir_colas', 'tanda', 'lista',
                                      'prueba', 'modelo', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo',
                                      'fase', 'figura_fase', 'figura_chi'])
     ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')

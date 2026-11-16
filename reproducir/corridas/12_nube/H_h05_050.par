@@ -1,0 +1,35 @@
+# Nube H_h05_050: F_0(Q, J) con s_Q = s_J = 0.1 por exp(-(L - 2)^2/s_L^2), s_L = 0, factor en J hueco 0.05 (reducido.perfil_J),
+# M_gas = 0.0063, retícula 3200 x 100 recortada (2181 x 26) por N_L = 1:
+# 56706 partículas, N_ef = 6224. Generado por reproducir/scripts/nube_L.py.
+# Cambios: Nt = 236000.
+state            = checkpoint
+CheckPointfile   = rep/12_nube/ic/H_h05_050.dat
+Nrc              = 2181
+Npc              = 26
+Nlc              = 1
+a0               = 0.0063
+l0               = 2.0
+sl               = 0.5
+sr               = 0.1
+sp               = 0.1
+lminc            = 1.5
+lmaxc            = 2.5
+rminc            = 3.0
+rmaxc            = 14.0
+pminc            = -0.25
+pmaxc            = 0.25
+dr               = 0.1
+rmin             = 0.0
+rmax             = 20.0
+pmax             = 2.0
+courant          = 1.0
+Nt               = 236000
+integrator       = yoshida4
+bsplineorder     = 1
+BGtype           = Isochrone
+autointeraction  = .true.
+spatial_output   = 200
+field_output     = 200
+time_output      = 20000
+output_format    = raw
+directory        = rep/12_nube/H_h05_050
