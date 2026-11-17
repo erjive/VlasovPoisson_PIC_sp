@@ -665,13 +665,15 @@ def armonicos(n):
     return np.load(sal)
 
 
-def perfiles(n, tiempos=(3, 5, 10, 15, 20, 25), nb=40, xmax=0.4):
+def perfiles(n, tiempos=(3, 5, 10, 15, 20, 25), nb=40, xmax=0.4, archivo='perfiles.npz'):
     """La FD junto a la órbita circular en t/tau_1 = tiempos: en nb franjas de J entre 0 y xmax s_J, la masa por
     unidad de J (f0, la FD promediada en el ángulo salvo un factor) y el módulo de sus tres primeros armónicos,
     a_k = |sum_i m_i exp(-i k Q_i)|/dJ, todo por unidad de masa total. Cada valor es la media de las cinco
     instantáneas alrededor del tiempo pedido. La cola de h_k la fija el exponente de a_k en J -> 0 (Sección 3 del
-    artículo): a_k ~ J^q da t^-(q+1). Se guarda en <n>/perfiles.npz. Necesita <n>/bulto.npz."""
-    sal = ruta(n, 'perfiles.npz')
+    artículo): a_k ~ J^q da t^-(q+1). Se guarda en <n>/perfiles.npz. Necesita <n>/bulto.npz.
+    perfiles_ancho(n) hace lo mismo hasta 3 s_J (300 franjas), para ver el borde interior de las formas cuyo soporte
+    no llega a la órbita circular."""
+    sal = ruta(n, archivo)
     if not os.path.exists(sal):
         d = np.load(ruta(n, 'bulto.npz'))
         t, w = d['t'], np.asarray(d['w'], float); Q, J = d['Q'], d['J']
@@ -693,6 +695,36 @@ def perfiles(n, tiempos=(3, 5, 10, 15, 20, 25), nb=40, xmax=0.4):
     return np.load(sal)
 
 
+def perfiles_ancho(n):
+    return perfiles(n, nb=300, xmax=3.0, archivo='perfiles_ancho.npz')
+
+
+def cinematica(n, t0s=(3, 5, 10), base=30):
+    """Continuación cinemática de la corrida n desde t0 = t0s tau_1: con el ángulo Q_i de cada partícula en t0 y su
+    frecuencia w_i (pendiente de Q_i desenrollado en las `base` instantáneas siguientes, unas tres vueltas radiales),
+    h_k^cin(t) = sum_i m_i exp(-i k (Q_i(t0) + w_i (t - t0)))/sum_i m_i, k = 1, 2, 3, para t >= t0. Es lo que daría la
+    mezcla de fases sola, en un potencial estacionario y con las acciones fijas. Si coincide con el h_k(t) de la
+    corrida, desde t0 el campo ya no actúa sobre la mezcla; lo que difiera es efecto colectivo. Se guarda en
+    <n>/cinematica.npz junto con h_k(t). Necesita <n>/bulto.npz."""
+    sal = ruta(n, 'cinematica.npz')
+    if not os.path.exists(sal):
+        d = np.load(ruta(n, 'bulto.npz'))
+        t, w = d['t'], np.asarray(d['w'], float); Q = d['Q']; tau = tau_de(n); W = w.sum()
+        hc = np.full((len(t0s), 3, len(t)), np.nan, complex); t0 = np.zeros(len(t0s))
+        for i, T in enumerate(t0s):
+            k0 = int(np.argmin(np.abs(t - T*tau))); k1 = min(k0 + base, len(t) - 1); t0[i] = t[k0]
+            q = np.unwrap(Q[k0:k1 + 1].astype(float), axis=0); ts = t[k0:k1 + 1] - t[k0]
+            ok = np.isfinite(q).all(0)
+            om = ((ts - ts.mean())[:, None]*(q[:, ok] - q[:, ok].mean(0))).sum(0)/((ts - ts.mean())**2).sum()
+            q0 = q[0, ok]; wk = w[ok]
+            for k in range(k0, len(t)):
+                f = q0 + om*(t[k] - t[k0])
+                for m in (1, 2, 3):
+                    hc[i, m - 1, k] = (wk*np.exp(-1j*m*f)).sum()/W
+        np.savez(sal, t=t, tau=tau, t0=t0, hk_cin=hc, hk=d['hk'][:, 1:4])
+    return np.load(sal)
+
+
 def medir_colas(solo=None):
     """armonicos y perfiles de las corridas con una sola L que tienen bulto.npz y aún no los tienen (las anteriores
     al 2026-11-16 se midieron sin ellos; sus bulto.npz están donde se corrieron)."""
@@ -702,6 +734,9 @@ def medir_colas(solo=None):
         if not (os.path.exists(ruta(n, 'armonicos.npz')) and os.path.exists(ruta(n, 'perfiles.npz'))):
             armonicos(n); perfiles(n)
             print(f'  {n}: armonicos.npz y perfiles.npz', flush=True)
+        if not (os.path.exists(ruta(n, 'perfiles_ancho.npz')) and os.path.exists(ruta(n, 'cinematica.npz'))):
+            t0 = time.time(); perfiles_ancho(n); cinematica(n)
+            print(f'  {n}: perfiles_ancho.npz y cinematica.npz ({time.time()-t0:.0f} s)', flush=True)
 
 
 def por_capas_reducido(nombre):
@@ -743,7 +778,7 @@ def medir(solo=None):
         t0 = time.time()
         medidas(n); por_capas(n); B.campo_particulas(n)
         if c['nl'] == 1:
-            B.nucleo(n); armonicos(n); perfiles(n)
+            B.nucleo(n); armonicos(n); perfiles(n); perfiles_ancho(n); cinematica(n)
         else:
             nucleo_por_capas(n)
         r = resumen(n)

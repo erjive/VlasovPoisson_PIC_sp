@@ -45,7 +45,8 @@ for n in $corridas; do
   filtros+=(--include="/$n.ok" --include="/$n.meta" --include="/$n.log" --include="/slurm_${n}_*" --include="/$n/"
             --include="/$n/medidas.npz" --include="/$n/capas.npz" --include="/$n/campo.npz"
             --include="/$n/resumen.npz" --include="/$n/nucleo.npz" --include="/$n/nucleo_capas.npz"
-            --include="/$n/armonicos.npz" --include="/$n/perfiles.npz"
+            --include="/$n/armonicos.npz" --include="/$n/perfiles.npz" --include="/$n/perfiles_ancho.npz"
+            --include="/$n/cinematica.npz"
             --include="/$n/params_usados.par")
   [ $grande = 1 ] && filtros+=(--include="/$n/bulto.npz")
 done
