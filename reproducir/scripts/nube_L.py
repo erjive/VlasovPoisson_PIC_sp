@@ -1102,7 +1102,7 @@ def familias_L():
             continue
         tau = tau_tabla(n)
         tc, _, _, coh = por_capas(n)
-        f = dict(n=n, sl=c['sl'], nl=c['nl'], x=100*c['sl']/(np.sqrt(2)*L0), P=numeros(medidas(n), tau), mu=float(resumen(n)['mu']),
+        f = dict(n=n, sl=c['sl'], nl=c['nl'], x=100*c['sl']/(np.sqrt(2)*L0), P=numeros(medidas(n), tau), gam=gamma_de(c['m'], c['pot'], c['sj']),
                  D=campo(n), coh=coh[(tc >= 10*tau) & (tc <= 20*tau)].mean(),
                  mcc=(numeros(medidas(n), tau)['mc'] if c['nl'] == 1 else mc_capas(n)))
         if c['red'] and os.path.exists(os.path.join(R.DATOS, c['red'] + '_diag.npz')):
@@ -1130,25 +1130,26 @@ def J_mediana(sj=SJ):
 
 def constantes(pot='isocrono', sj=SJ):
     """Constantes del modelo epicíclico para la familia (potencial, s_J), con L_0 = 2: acoplamiento g, |Omega_0'| =
-    |dOmega/dJ| y |dOmega/dL| en la órbita circular, y la mediana J_med de la acción del dato."""
+    |dOmega/dJ| y |dOmega/dL| en la órbita circular, y el promedio <J> de la acción del dato."""
     F = R.fondo(pot, L0); h = 1e-5
     dOdL = abs(R.c_de_L(L0 + h, pot)**-3 - R.c_de_L(L0 - h, pot)**-3)/(2*h)
-    return dict(g=F['g'], dOdJ=3.0*F['c']**-4, dOdL=dOdL, jmed=J_mediana(sj))
+    return dict(g=F['g'], dOdJ=3.0*F['c']**-4, dOdL=dOdL, jprom=R.J_promedio(sj))
 
 
 def gamma_de(m, pot='isocrono', sj=SJ):
-    """Gamma = g M_gas/(|Omega_0'| J_med^(3/2)), Eq. (Gamma) del artículo."""
+    """Gamma = g M_gas/(|Omega_0'| <J>^(3/2)), Eq. (GammaDef) del artículo."""
     k = constantes(pot, sj)
-    return k['g']*m/(k['dOdJ']*k['jmed']**1.5)
+    return k['g']*m/(k['dOdJ']*k['jprom']**1.5)
 
 
 def chi_de(m, sl, pot='isocrono', sj=SJ):
-    """chi = |dOmega/dL| sigma_L sqrt(J_med)/(g M_gas), con sigma_L = s_L/sqrt(2): la dispersión de las frecuencias de
-    las capas de L frente a la velocidad angular g M_gas/sqrt(J_med) de la rotación que la nube induce a su distancia
-    sqrt(J_med) de la órbita circular. Es el tiempo de transporte sqrt(J_med)/(g M_gas) entre el tiempo de desfase de
-    las capas, como 1/Gamma lo es entre el tiempo de la cizalla en J. chi = c'(L_0) sigma_L/(Gamma J_med)."""
+    """chi = |dOmega/dL| sigma_L sqrt(<J>)/(g M_gas), con sigma_L = s_L/sqrt(2): la dispersión de las frecuencias de
+    las capas de L frente a la velocidad angular g M_gas/sqrt(<J>) de la rotación que la nube induce a su distancia
+    sqrt(<J>) de la órbita circular. Es el tiempo de transporte sqrt(<J>)/(g M_gas) entre el tiempo de desfase de
+    las capas, como 1/Gamma lo es entre el tiempo de la cizalla en J. chi = c'(L_0) sigma_L/(Gamma <J>). La predicción
+    registrada usó la mediana, con la que chi es 1.8 % menor en estas nubes."""
     k = constantes(pot, sj)
-    return k['dOdL']*sl/np.sqrt(2)*np.sqrt(k['jmed'])/(k['g']*m)
+    return k['dOdL']*sl/np.sqrt(2)*np.sqrt(k['jprom'])/(k['g']*m)
 
 
 def sl_de_chi(chi, m, pot='isocrono', sj=SJ):
@@ -1181,10 +1182,10 @@ def frontera(verboso=True):
         if len(F) < 2 or F[0]['sl'] != 0:
             continue
         k = constantes(pot, sj); dOdL = k['dOdL']; rho = np.sqrt(0.1*sj)
-        nube = k['g']*m/np.sqrt(k['jmed'])
+        nube = k['g']*m/np.sqrt(k['jprom'])
         p(f'\n{pot}, s_J = {sj:g}: |dOmega/dL| = {dOdL:.4f} en J = 0, g = {k["g"]:.5f}, rho = {rho:.3f}, m_mix = {M_MIX:.4f}, '
-          f'J_med = {k["jmed"]:.4f}')
-        p(f'M_gas/M = {m:g} (mu = {F[0]["mu"]:.2f}, Gamma = {gamma_de(m, pot, sj):.3f}): s_L, sigma_L/L_0 (%), N_L, chi | m_c, |h_1|, '
+          f'<J> = {k["jprom"]:.4f}')
+        p(f'M_gas/M = {m:g} (Gamma = {gamma_de(m, pot, sj):.3f}): s_L, sigma_L/L_0 (%), N_L, chi | m_c, |h_1|, '
           'masa con J < 0.2 s_J: PIC (modelo) | D, coherencia')
         for f in F:
             P, Mm = f['P'], f.get('M')
@@ -1194,7 +1195,7 @@ def frontera(verboso=True):
         if F[0]['P']['mc'] < 1.5*M_MIX:
             p('   con L igual no hay núcleo (m_c compatible con m_mix): no hay frontera que medir')
             continue
-        r = dict(gamma=gamma_de(m, pot, sj), mu=F[0]['mu'], mc0=F[0]['P']['mc'])
+        r = dict(gamma=gamma_de(m, pot, sj), mc0=F[0]['P']['mc'])
         w = k['g']*F[0]['P']['mc']*m/rho
         for clave, nombre in (('P', 'PIC'), ('M', 'modelo')):
             G = [f for f in F if clave in f]
@@ -1228,9 +1229,9 @@ def tabla_L():
         for i, f in enumerate(F):
             P, Mm = f['P'], f.get('M')
             mod = lambda k, fmt: (fmt(Mm[k]) if Mm else '--')
-            filas.append((f'${m:g}$ & ${f["mu"]:.2f}$' if i == 0 else ' & ') + f' & ${f["x"]:.2f}$ & ${f["nl"]}$ & '
+            filas.append((f'${m:g}$ & ${f["gam"]:.2f}$' if i == 0 else ' & ') + f' & ${f["x"]:.2f}$ & ${f["nl"]}$ & '
                          f'{sci(P["h1"])} & {mod("h1", sci)} & ${P["m02"]:.3f}$ & {mod("m02", lambda x: f"${x:.3f}$")} & '
-                         f'${P["mc"]:.3f}$ & {mod("mc", lambda x: f"${x:.3f}$")} \\\\')
+                         f'${P["rho_c"]:.2f}$ & {mod("rho_c", lambda x: f"${x:.2f}$")} & ${P["mc"]:.3f}$ & {mod("mc", lambda x: f"${x:.3f}$")} \\\\')
         filas.append('\\hline')
     filas = filas[:-1]
     sal = os.path.join(FIJO, 'docs', 'articulo', 'tab_L.tex')
@@ -1282,7 +1283,7 @@ def figura():
         a.tick_params(length=3, width=0.6); a.tick_params(which='minor', length=2, width=0.4)
         a.set_title(titulo, loc='left', fontsize=9.5, color=tinta, pad=6)
         a.set_xlabel(r'$\sigma_L/L_0$ (percent)')
-    h = [Line2D([], [], color=tonos[m], lw=1.6, label=rf'$M_{{gas}}/M={m:g}$ ($\mu={datos[m][0]["mu"]:.2f}$)') for m in masas]
+    h = [Line2D([], [], color=tonos[m], lw=1.6, label=rf'$M_{{gas}}/M={m:g}$ ($\Gamma={datos[m][0]["gam"]:.2f}$)') for m in masas]
     h += [Line2D([], [], color=tinta2, lw=1.3, marker='o', ms=5, mec=sup, label='PIC'),
           Line2D([], [], color=tinta2, lw=1.1, ls=(0, (4, 2.5)), marker='D', ms=4, mec=sup, label='epicyclic model')]
     fig.tight_layout(rect=(0, 0, 1, 0.84), w_pad=1.8)
@@ -1368,8 +1369,8 @@ def figura_chi():
     con = [k for k in ref + otras if 'mitad_P' in res[k]]
     print('  para el artículo (dos decimales): chi en la mitad, PIC: ' + ', '.join(f'{chi_de(k[2], res[k]["mitad_P"], k[0], k[1]):.2f}' for k in con)
           + '; modelo: ' + ', '.join(f'{chi_de(k[2], res[k]["mitad_M"], k[0], k[1]):.2f}' for k in con if 'mitad_M' in res[k])
-          + '; sigma_L de la mitad/(Gamma J_med): '
-          + ', '.join(f'{res[k]["mitad_P"]/np.sqrt(2)/(res[k]["gamma"]*constantes(k[0], k[1])["jmed"]):.2f}' for k in con))
+          + '; sigma_L de la mitad/(Gamma <J>): '
+          + ', '.join(f'{res[k]["mitad_P"]/np.sqrt(2)/(res[k]["gamma"]*constantes(k[0], k[1])["jprom"]):.2f}' for k in con))
     print('  chi de las corridas de cada familia: ' + '; '.join(f'{k[2]:g}: ' + ' '.join(f'{x:.2f}' for x in res[k]['P'][0]) for k in ref + otras))
     xs = [100*res[k]['mitad_P']/np.sqrt(2)/L0 for k in con]; cs = [chi_de(k[2], res[k]['mitad_P'], k[0], k[1]) for k in con]
     cm = [chi_de(k[2], res[k]['mitad_M'], k[0], k[1]) for k in con if 'mitad_M' in res[k]]
@@ -1413,6 +1414,55 @@ def tabla_chi():
     print('escrita', sal)
 
 
+def mc_libre(n):
+    """m_c de la mezcla libre exacta de la retícula de la corrida n (con la L de cada capa), con el estimador de
+    reducido.medidas_plano y una instantánea cada 50 unidades de tiempo en t >= 20 tau_1. Se guarda en <n>/mc_libre.npy."""
+    sal = ruta(n, 'mc_libre.npy')
+    if os.path.exists(sal):
+        return float(np.load(sal))
+    c = CORRIDAS[n]; sj, pot = c['sj'], c['pot']; tau = tau_tabla(n)
+    if c['nl'] == 1:
+        Q, J, w = R.reticula(c['nj'], c['nq'], sj=sj, sq=SQ); L = np.full(J.shape, L0)
+    else:
+        Q, J, L, w = R.reticula_L(c['nj'], c['nq'], c['nl'], c['sl'], ancho=c['ancho'], sj=sj)
+    Om = (J + R.c_de_L(L, pot))**-3; a = np.sqrt(2*J); rad = np.sqrt(2*0.05*sj); b = np.arange(-1.8, 1.8 + rad, 0.5*rad)
+
+    def disco(x, y):
+        h = np.histogram2d(x, y, bins=(b, b), weights=w)[0]
+        q = h.copy(); q[1:] += h[:-1]; q[:-1] += h[1:]
+        q2 = q.copy(); q2[:, 1:] += q[:, :-1]; q2[:, :-1] += q[:, 1:]
+        i, j = np.unravel_index(np.argmax(q2), q2.shape)
+        x0, y0 = 0.5*(b[i] + b[i + 1]), 0.5*(b[j] + b[j + 1])
+        for _ in range(8):
+            s = (x - x0)**2 + (y - y0)**2 < rad**2
+            if w[s].sum() == 0:
+                break
+            x0, y0 = np.average(x[s], weights=w[s]), np.average(y[s], weights=w[s])
+        return w[(x - x0)**2 + (y - y0)**2 < rad**2].sum()/w.sum()
+    tf = float(np.load(ruta(n, 'medidas.npz'))['t'][-1])
+    v = np.mean([disco(a*np.cos(Q + Om*t), a*np.sin(Q + Om*t)) for t in np.arange(20*tau, tf, 50.0)])
+    np.save(sal, v)
+    return float(v)
+
+
+def sensibilidad():
+    """Cuánto cambia la mitad del exceso de m_c si la referencia es la mezcla libre de cada retícula en vez de m_mix, y dónde
+    baja F_c de Fhat_max, para las ocho series de la Sección 8D. rho_c está en unidades de Fhat_max."""
+    print('familia | mitad con m_mix: sigma_L/L_0 (%), chi | con la mezcla libre: sigma_L/L_0 (%), chi | intervalo de sigma_L/L_0 (%) en que F_c baja de 1 | m_c libre')
+    cm, cl, sl, lib = [], [], [], []
+    for (pot, sj, m), F in sorted(familias_L().items()):
+        if len(F) < 2 or F[0]['sl'] != 0 or F[0]['P']['mc'] < 1.5*M_MIX:
+            continue
+        s = np.array([f['sl'] for f in F]); mc = np.array([f['P']['mc'] for f in F]); ml = np.array([mc_libre(f['n']) for f in F])
+        Fc = np.array([f['P']['rho_c'] for f in F]); lib += list(ml)
+        a, b = _mitad(s, mc - M_MIX), _mitad(s, mc - ml); cm.append(chi_de(m, a, pot, sj)); cl.append(chi_de(m, b, pot, sj)); sl.append(b)
+        k = np.nonzero(Fc < 1)[0]; k = [i for i in k if i > 0]
+        intv = f'{100*s[k[0] - 1]/np.sqrt(2)/L0:.2f}-{100*s[k[0]]/np.sqrt(2)/L0:.2f}' if k else f'sigue > 1 hasta {100*s[-1]/np.sqrt(2)/L0:.2f}'
+        print(f'{pot:8} s_J {sj:g} M {m:g} | {100*a/np.sqrt(2)/L0:.2f} {cm[-1]:.3f} | {100*b/np.sqrt(2)/L0:.2f} {cl[-1]:.3f} | {intv} | {ml.min():.3f}-{ml.max():.3f}')
+    x = 100*np.array(sl)/np.sqrt(2)/L0
+    print(f'chi: con m_mix {min(cm):.2f}-{max(cm):.2f}; con la mezcla libre {min(cl):.2f}-{max(cl):.2f}; anchura con la mezcla libre {x.min():.2f}-{x.max():.2f} % (factor {x.max()/x.min():.1f}); m_c libre {min(lib):.3f}-{max(lib):.3f}')
+
+
 def articulo():
     """Tablas y figuras de la Sección 8 del artículo."""
     tabla_L(); figura(); tabla_chi(); figura_chi()
@@ -1441,7 +1491,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('paso', choices=['preparar', 'tiempo', 'correr', 'analizar', 'medir', 'medir_capas', 'medir_colas', 'tanda', 'lista',
                                      'prueba', 'modelo', 'consistencia', 'tabla', 'reticulas', 'figura', 'frontera', 'articulo',
-                                     'fase', 'figura_fase', 'figura_chi'])
+                                     'fase', 'figura_fase', 'figura_chi', 'sensibilidad'])
     ap.add_argument('nombres', nargs='*', help='tanda (paso tanda), o tandas y corridas (paso lista)')
     ap.add_argument('--solo', nargs='+', help='solo estas corridas')
     a = ap.parse_args()
@@ -1460,7 +1510,7 @@ if __name__ == '__main__':
             consistencia(n) if n == 'C021' else consistencia_familia(n)
     elif a.paso == 'modelo':
         modelo(a.nombres)
-    elif a.paso in ('tabla', 'reticulas', 'figura', 'frontera', 'articulo', 'figura_fase', 'figura_chi'):
+    elif a.paso in ('tabla', 'reticulas', 'figura', 'frontera', 'articulo', 'figura_fase', 'figura_chi', 'sensibilidad'):
         globals()[a.paso]()
     else:
         globals()[a.paso](a.solo)
